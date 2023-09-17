@@ -1,0 +1,9 @@
+DEBUG:asyncio:Using proactor: IocpProactor
+INFO:uvicorn.error:Started server process [40100]
+INFO:uvicorn.error:Waiting for application startup.
+INFO:pythonConfig:GPU available: True
+INFO:pythonConfig:<torch.cuda.device object at 0x0000025996DBD8B0>
+INFO:uvicorn.error:Application startup complete.
+ERROR:uvicorn.error:[Errno 10048] error while attempting to bind on address ('127.0.0.1', 8005): only one usage of each socket address (protocol/network address/port) is normally permitted
+INFO:uvicorn.error:Waiting for application shutdown.
+INFO:uvicorn.error:Application shutdown complete.

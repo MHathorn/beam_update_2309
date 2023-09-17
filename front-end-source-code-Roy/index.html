@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>UNITAC AI Building Tracker</title>
+  <link rel="icon" type="image/jpg" href="/icons/unitac-logo.jpg">
+  <link rel="stylesheet" href="normalize.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="js/neutralino.js"></script>
+  <!-- Your app's source files -->
+  <script src="js/main.js"></script>
+</head>
+
+<body>
+  <div id="grid-container">
+    <div id="sidebar">
+      <div class="sidebarContainer">
+        <h1>UNITAC AI<br> Building Tracker</h1>
+        <div class="footer">
+            <p>
+              <a href="mailto:unitac@un.org">Contact</a><br><br>
+            </p>
+            <div class="logoContainer">
+              <div id="logo"></div>
+            </div>
+        </div>
+      </div>
+    </div>
+    <div id="content">
+      <div id="menuContainer">
+        <button id="button1" class="buttonIcon" onclick="loadInput()"
+          title="Start the process by selecting a folder containing the aerial photography.">
+          <div class="icon">
+            <div id="input-folder-icon"></div>
+          </div>
+          <div class="text">Select Input Folder</div>
+        </button>
+
+        <button id="button2" class="buttonIcon button2" onclick="loadModel(false)" title="Select a model to use for building detection.">
+          <div class="icon">
+            <div id="model-folder-icon"></div>
+          </div>
+          <div class="text">Select Model</div>
+        </button>
+
+        <button id="button3" class="buttonIcon button3" onclick="loadOutput()"
+          title="Select an output folder to store the shapefiles containing the detected buildings.">
+          <div class="icon">
+            <div id="output-folder-icon"></div>
+          </div>
+          <div class="text">Select Output Folder</div>
+        </button>
+
+        <button id="button4" class="buttonIcon button4" onclick="startInference()"
+          title="Start the building detection process for all images in the selected folder.">
+          <div class="icon">
+            <div id="building-detection-icon"></div>
+          </div>
+          <div class="text">Run Building Detection</div>
+        </button>
+      </div>
+
+      <div id="progressContainer">
+        <div class="mid-class ">
+          <h2 id="inputLabel">Building detection progress will be displayed here.</h2>
+        </div>
+        <div class="mid-class ">
+          <div id="progress"></div>
+        </div>
+        <div class="mid-class" style="margin-bottom: 20px;">
+          <div id="elapsedTime" class="time" style="margin: 0px 5px 0px 0px;"></div>
+          <div id="remainingTime" class="time"></div>
+        </div>
+        <div class="mid-class ">
+          <ul id="imageList" class="check-list"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+
+
+</body>
+
+</html>
