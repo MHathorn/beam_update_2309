@@ -29,7 +29,7 @@ if not exist "%MINICONDAPATH%\" (goto CONDAERROR)
 if errorlevel 1 goto CONDAERROR
 
 echo Miniconda3 has been installed!
-goto END
+goto CREATEENV
 
 :CONDAERROR
 echo Miniconda3 install failed!
@@ -37,49 +37,18 @@ exit /B 1
 
 :CONDAFOUND
 echo Conda is already installed!
+goto CREATEENV
+
+:CREATEENV echo Creating beam environment from environment.yml (This may take some time, please wait)… 
+"%MINICONDAPATH%\Scripts\conda.exe" env create -f environment.yml 
+if errorlevel 1 goto ENVERROR
+
+echo Beam environment has been created! 
 goto END
 
-
-:END
-exit /B 0
-
-REM write a batch file to create a conda environment and install cudatoolkit and fastai with conda
-REM Path: install_fastai.bat
-
-@echo off
-
-set ORIGDIR="%CD%"
-set ENVNAME=fastai
-set CONDAENV=%USERPROFILE%\Miniconda3\envs\%ENVNAME%
-set CONDAEXE=%USERPROFILE%\Miniconda3\Scripts\conda.exe
-
-echo Creating conda environment %ENVNAME%...
-"%CONDAEXE%" create -y -n %ENVNAME% python=3.7
-if errorlevel 1 goto CONDAERROR
-
-echo Installing cudatoolkit...
-"%CONDAEXE%" install -y -n %ENVNAME% -c pytorch -c fastai fastai
-if errorlevel 1 goto CONDAERROR
-
-echo Installing fastai...
-"%CONDAEXE%" install -y -n %ENVNAME% -c pytorch -c fastai fastai
-if errorlevel 1 goto CONDAERROR
-
-echo Activating conda environment %ENVNAME%...
-call "%CONDAEXE%" activate %ENVNAME%
-if errorlevel 1 goto CONDAERROR
-
-echo Installing fastai...
-pip install fastai
-if errorlevel 1 goto CONDAERROR
-
-echo fastai has been installed!
-goto END
-
-:CONDAERROR
-echo fastai install failed!
+:ENVERROR
+echo Beam environment creation failed!
 exit /B 1
 
 :END
 exit /B 0
-

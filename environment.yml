@@ -1,0 +1,10 @@
+name: beam
+channels:
+  - conda-forge
+  - nvidia
+dependencies:
+  - pytorch::pytorch=1.13.1
+  - pytorch::torchvision=0.14.1
+  - pytorch::pytorch-cuda
+  - fastai::fastcore
+  - fastai::fastai
