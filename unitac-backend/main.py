@@ -17,6 +17,7 @@ from datetime import datetime
 from time import sleep
 import pathlib
 from natsort import os_sorted
+import osgeo
 import rasterio
 import rasterio.features
 import shapely.geometry
