@@ -1,6 +1,6 @@
-REM Activate pytorch_env
-set MINICONDAPATH=%USERPROFILE%\Miniconda3
-call "%MINICONDAPATH%\Scripts\activate.bat" testenv
+REM Activate environment
+set MAMBAPATH=%USERPROFILE%\mambaforge
+call "%MAMBAPATH%\Scripts\activate.bat" beam_test
 
 echo %cd%
 start "frontend" unitac-frontend-win_x64.exe 
@@ -14,6 +14,6 @@ else
 fi
 
 REM Deactivate the virtual environment
-call "%MINICONDAPATH%\Scripts\deactivate.bat"
+call "%MAMBAPATH%\Scripts\deactivate.bat"
 
 exit 0

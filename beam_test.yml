@@ -1,0 +1,24 @@
+name: beam_test
+channels:
+  - pytorch
+  - fastai
+  - nvidia
+  - conda-forge
+dependencies:
+  - pytorch=1.13.1
+  - pytorch-cuda=11.7
+  - fastai
+  - colorlog
+  - geopandas
+  - fastapi
+  - uvicorn
+  - rasterio
+  - ipython
+  - opencv
+  - natsort
+  - pillow
+  - pip
+  - pip:
+      - torchaudio==0.13.1
+      - torchvision==0.14.1    
+      - semtorch

@@ -1,0 +1,9 @@
+DEBUG:asyncio:Using proactor: IocpProactor
+INFO:pythonConfig:GPU available: True
+INFO:pythonConfig:<torch.cuda.device object at 0x000001DE74A135B0>
+INFO:pythonConfig:The model is: ../models/HRNet.pkl
+INFO:pythonConfig:Model ../models/HRNet.pkl loaded successfully
+INFO:pythonConfig:The model is: undefined
+WARNING:pythonConfig:Unexpected err=FileNotFoundError(2, 'No such file or directory'), type(err)=<class 'FileNotFoundError'>
+INFO:pythonConfig:The model is: C:\Users\hatho\OneDrive\CASA\beam_update_2309\models\U-Net_loss_None_2023-08-07_18_35_exported.pkl
+INFO:pythonConfig:The model is: C:\Users\hatho\OneDrive\CASA\beam_update_2309\models\U-Net_loss_None_2023-08-07_18_35_exported.pkl

@@ -1,0 +1,407 @@
+DEBUG:asyncio:Using proactor: IocpProactor
+INFO:pythonConfig:GPU available: True
+INFO:pythonConfig:<torch.cuda.device object at 0x000001ED15FC35B0>
+INFO:pythonConfig:The model is: ../models/HRNet.pkl
+INFO:pythonConfig:Model ../models/HRNet.pkl loaded successfully
+INFO:pythonConfig:The model is: C:\Users\hatho\OneDrive\CASA\beam_update_2309\models\U-Net_loss_None_2023-08-07_18_35_exported.pkl
+INFO:pythonConfig:Model C:\Users\hatho\OneDrive\CASA\beam_update_2309\models\U-Net_loss_None_2023-08-07_18_35_exported.pkl loaded successfully
+INFO:pythonConfig:Images will imported from: C:\Users\hatho\OneDrive\CASA\beam_update_2309\test-image
+INFO:pythonConfig:Input Images are:
+C:\Users\hatho\OneDrive\CASA\beam_update_2309\test-image\2020_RGB_10cm_CA_065.tif
+INFO:pythonConfig:The model is: C:\Users\hatho\OneDrive\CASA\beam_update_2309\models\U-Net_loss_None_2023-08-07_18_35_exported.pkl
+INFO:pythonConfig:Model C:\Users\hatho\OneDrive\CASA\beam_update_2309\models\U-Net_loss_None_2023-08-07_18_35_exported.pkl loaded successfully
+INFO:pythonConfig:The Shape files will be exported to: 
+INFO:pythonConfig:Start creating tiles for the image C:\Users\hatho\OneDrive\CASA\beam_update_2309\test-image\2020_RGB_10cm_CA_065.tif ...
+DEBUG:PIL.Image:Importing BlpImagePlugin
+DEBUG:PIL.Image:Importing BmpImagePlugin
+DEBUG:PIL.Image:Importing BufrStubImagePlugin
+DEBUG:PIL.Image:Importing CurImagePlugin
+DEBUG:PIL.Image:Importing DcxImagePlugin
+DEBUG:PIL.Image:Importing DdsImagePlugin
+DEBUG:PIL.Image:Importing EpsImagePlugin
+DEBUG:PIL.Image:Importing FitsImagePlugin
+DEBUG:PIL.Image:Importing FliImagePlugin
+DEBUG:PIL.Image:Importing FpxImagePlugin
+DEBUG:PIL.Image:Image: failed to import FpxImagePlugin: No module named 'olefile'
+DEBUG:PIL.Image:Importing FtexImagePlugin
+DEBUG:PIL.Image:Importing GbrImagePlugin
+DEBUG:PIL.Image:Importing GifImagePlugin
+DEBUG:PIL.Image:Importing GribStubImagePlugin
+DEBUG:PIL.Image:Importing Hdf5StubImagePlugin
+DEBUG:PIL.Image:Importing IcnsImagePlugin
+DEBUG:PIL.Image:Importing IcoImagePlugin
+DEBUG:PIL.Image:Importing ImImagePlugin
+DEBUG:PIL.Image:Importing ImtImagePlugin
+DEBUG:PIL.Image:Importing IptcImagePlugin
+DEBUG:PIL.Image:Importing JpegImagePlugin
+DEBUG:PIL.Image:Importing Jpeg2KImagePlugin
+DEBUG:PIL.Image:Importing McIdasImagePlugin
+DEBUG:PIL.Image:Importing MicImagePlugin
+DEBUG:PIL.Image:Image: failed to import MicImagePlugin: No module named 'olefile'
+DEBUG:PIL.Image:Importing MpegImagePlugin
+DEBUG:PIL.Image:Importing MpoImagePlugin
+DEBUG:PIL.Image:Importing MspImagePlugin
+DEBUG:PIL.Image:Importing PalmImagePlugin
+DEBUG:PIL.Image:Importing PcdImagePlugin
+DEBUG:PIL.Image:Importing PcxImagePlugin
+DEBUG:PIL.Image:Importing PdfImagePlugin
+DEBUG:PIL.Image:Importing PixarImagePlugin
+DEBUG:PIL.Image:Importing PngImagePlugin
+DEBUG:PIL.Image:Importing PpmImagePlugin
+DEBUG:PIL.Image:Importing PsdImagePlugin
+DEBUG:PIL.Image:Importing QoiImagePlugin
+DEBUG:PIL.Image:Importing SgiImagePlugin
+DEBUG:PIL.Image:Importing SpiderImagePlugin
+DEBUG:PIL.Image:Importing SunImagePlugin
+DEBUG:PIL.Image:Importing TgaImagePlugin
+DEBUG:PIL.Image:Importing TiffImagePlugin
+DEBUG:PIL.Image:Importing WebPImagePlugin
+DEBUG:PIL.Image:Importing WmfImagePlugin
+DEBUG:PIL.Image:Importing XbmImagePlugin
+DEBUG:PIL.Image:Importing XpmImagePlugin
+DEBUG:PIL.Image:Importing XVThumbImagePlugin
+DEBUG:PIL.TiffImagePlugin:*** TiffImageFile._open ***
+DEBUG:PIL.TiffImagePlugin:- __first: 189313570
+DEBUG:PIL.TiffImagePlugin:- ifh: b'II*\x00"\xb2H\x0b'
+DEBUG:PIL.TiffImagePlugin:Seeking to frame 0, on frame -1, __next 189313570, location: 8
+DEBUG:PIL.TiffImagePlugin:Loading tags, location: 189313570
+DEBUG:PIL.TiffImagePlugin:tag: ImageWidth (256) - type: short (3) - value: b"\x10'"
+DEBUG:PIL.TiffImagePlugin:tag: ImageLength (257) - type: short (3) - value: b"\x10'"
+DEBUG:PIL.TiffImagePlugin:tag: BitsPerSample (258) - type: short (3) Tag Location: 189313608 - Data Location: 189313804 - value: b'\x08\x00\x08\x00\x08\x00\x08\x00'
+DEBUG:PIL.TiffImagePlugin:tag: Compression (259) - type: short (3) - value: b'\x05\x00'
+DEBUG:PIL.TiffImagePlugin:tag: PhotometricInterpretation (262) - type: short (3) - value: b'\x02\x00'
+DEBUG:PIL.TiffImagePlugin:tag: StripOffsets (273) - type: long (4) Tag Location: 189313644 - Data Location: 189315064 - value: <table: 1252 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: Orientation (274) - type: short (3) - value: b'\x01\x00'
+DEBUG:PIL.TiffImagePlugin:tag: SamplesPerPixel (277) - type: short (3) - value: b'\x04\x00'
+DEBUG:PIL.TiffImagePlugin:tag: RowsPerStrip (278) - type: short (3) - value: b' \x00'
+DEBUG:PIL.TiffImagePlugin:tag: StripByteCounts (279) - type: long (4) Tag Location: 189313692 - Data Location: 189313812 - value: <table: 1252 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: PlanarConfiguration (284) - type: short (3) - value: b'\x01\x00'
+DEBUG:PIL.TiffImagePlugin:tag: Predictor (317) - type: short (3) - value: b'\x02\x00'
+DEBUG:PIL.TiffImagePlugin:tag: ExtraSamples (338) - type: short (3) - value: b'\x02\x00'
+DEBUG:PIL.TiffImagePlugin:tag: ModelPixelScaleTag (33550) - type: double (12) Tag Location: 189313740 - Data Location: 189316316 - value: b'\x9a\x99\x99\x99\x99\x99\xb9?\x9a\x99\x99\x99\x99\x99\xb9?\x00\x00\x00\x00\x00\x00\xf0?'
+DEBUG:PIL.TiffImagePlugin:tag: ModelTiepointTag (33922) - type: double (12) Tag Location: 189313752 - Data Location: 189316340 - value: <table: 48 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: GeoKeyDirectoryTag (34735) - type: short (3) Tag Location: 189313764 - Data Location: 189316388 - value: <table: 248 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: GeoDoubleParamsTag (34736) - type: double (12) Tag Location: 189313776 - Data Location: 189316636 - value: <table: 160 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: GeoAsciiParamsTag (34737) - type: string (2) Tag Location: 189313788 - Data Location: 189316796 - value: b'GCS_HARTEBEESTHOEK_1994|\x00'
+DEBUG:PIL.TiffImagePlugin:tag: GDAL_METADATA (42112) - type: string (2) Tag Location: 189313800 - Data Location: 189316822 - value: <table: 98 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: ImageWidth (256) - type: short (3) - value: b"\x10'"
+DEBUG:PIL.TiffImagePlugin:tag: ImageLength (257) - type: short (3) - value: b"\x10'"
+DEBUG:PIL.TiffImagePlugin:tag: BitsPerSample (258) - type: short (3) Tag Location: 189313608 - Data Location: 189313804 - value: b'\x08\x00\x08\x00\x08\x00\x08\x00'
+DEBUG:PIL.TiffImagePlugin:tag: Compression (259) - type: short (3) - value: b'\x05\x00'
+DEBUG:PIL.TiffImagePlugin:tag: PhotometricInterpretation (262) - type: short (3) - value: b'\x02\x00'
+DEBUG:PIL.TiffImagePlugin:tag: StripOffsets (273) - type: long (4) Tag Location: 189313644 - Data Location: 189315064 - value: <table: 1252 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: Orientation (274) - type: short (3) - value: b'\x01\x00'
+DEBUG:PIL.TiffImagePlugin:tag: SamplesPerPixel (277) - type: short (3) - value: b'\x04\x00'
+DEBUG:PIL.TiffImagePlugin:tag: RowsPerStrip (278) - type: short (3) - value: b' \x00'
+DEBUG:PIL.TiffImagePlugin:tag: StripByteCounts (279) - type: long (4) Tag Location: 189313692 - Data Location: 189313812 - value: <table: 1252 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: PlanarConfiguration (284) - type: short (3) - value: b'\x01\x00'
+DEBUG:PIL.TiffImagePlugin:tag: Predictor (317) - type: short (3) - value: b'\x02\x00'
+DEBUG:PIL.TiffImagePlugin:tag: ExtraSamples (338) - type: short (3) - value: b'\x02\x00'
+DEBUG:PIL.TiffImagePlugin:tag: ModelPixelScaleTag (33550) - type: double (12) Tag Location: 189313740 - Data Location: 189316316 - value: b'\x9a\x99\x99\x99\x99\x99\xb9?\x9a\x99\x99\x99\x99\x99\xb9?\x00\x00\x00\x00\x00\x00\xf0?'
+DEBUG:PIL.TiffImagePlugin:tag: ModelTiepointTag (33922) - type: double (12) Tag Location: 189313752 - Data Location: 189316340 - value: <table: 48 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: GeoKeyDirectoryTag (34735) - type: short (3) Tag Location: 189313764 - Data Location: 189316388 - value: <table: 248 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: GeoDoubleParamsTag (34736) - type: double (12) Tag Location: 189313776 - Data Location: 189316636 - value: <table: 160 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: GeoAsciiParamsTag (34737) - type: string (2) Tag Location: 189313788 - Data Location: 189316796 - value: b'GCS_HARTEBEESTHOEK_1994|\x00'
+DEBUG:PIL.TiffImagePlugin:tag: GDAL_METADATA (42112) - type: string (2) Tag Location: 189313800 - Data Location: 189316822 - value: <table: 98 bytes>
+DEBUG:PIL.TiffImagePlugin:*** Summary ***
+DEBUG:PIL.TiffImagePlugin:- compression: tiff_lzw
+DEBUG:PIL.TiffImagePlugin:- photometric_interpretation: 2
+DEBUG:PIL.TiffImagePlugin:- planar_configuration: 1
+DEBUG:PIL.TiffImagePlugin:- fill_order: 1
+DEBUG:PIL.TiffImagePlugin:- YCbCr subsampling: None
+DEBUG:PIL.TiffImagePlugin:- size: (10000, 10000)
+DEBUG:PIL.TiffImagePlugin:format key: (b'II', 2, (1,), 1, (8, 8, 8, 8), (2,))
+DEBUG:PIL.TiffImagePlugin:- raw mode: RGBA
+DEBUG:PIL.TiffImagePlugin:- pil mode: RGBA
+DEBUG:PIL.TiffImagePlugin:have fileno, calling fileno version of the decoder.
+DEBUG:PIL.TiffImagePlugin:tag: ImageWidth (256) - type: short (3) - value: b"\x10'"
+DEBUG:PIL.TiffImagePlugin:tag: ImageLength (257) - type: short (3) - value: b"\x10'"
+DEBUG:PIL.TiffImagePlugin:tag: BitsPerSample (258) - type: short (3) Tag Location: 189313608 - Data Location: 189313804 - value: b'\x08\x00\x08\x00\x08\x00\x08\x00'
+DEBUG:PIL.TiffImagePlugin:tag: Compression (259) - type: short (3) - value: b'\x05\x00'
+DEBUG:PIL.TiffImagePlugin:tag: PhotometricInterpretation (262) - type: short (3) - value: b'\x02\x00'
+DEBUG:PIL.TiffImagePlugin:tag: StripOffsets (273) - type: long (4) Tag Location: 189313644 - Data Location: 189315064 - value: <table: 1252 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: Orientation (274) - type: short (3) - value: b'\x01\x00'
+DEBUG:PIL.TiffImagePlugin:tag: SamplesPerPixel (277) - type: short (3) - value: b'\x04\x00'
+DEBUG:PIL.TiffImagePlugin:tag: RowsPerStrip (278) - type: short (3) - value: b' \x00'
+DEBUG:PIL.TiffImagePlugin:tag: StripByteCounts (279) - type: long (4) Tag Location: 189313692 - Data Location: 189313812 - value: <table: 1252 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: PlanarConfiguration (284) - type: short (3) - value: b'\x01\x00'
+DEBUG:PIL.TiffImagePlugin:tag: Predictor (317) - type: short (3) - value: b'\x02\x00'
+DEBUG:PIL.TiffImagePlugin:tag: ExtraSamples (338) - type: short (3) - value: b'\x02\x00'
+DEBUG:PIL.TiffImagePlugin:tag: ModelPixelScaleTag (33550) - type: double (12) Tag Location: 189313740 - Data Location: 189316316 - value: b'\x9a\x99\x99\x99\x99\x99\xb9?\x9a\x99\x99\x99\x99\x99\xb9?\x00\x00\x00\x00\x00\x00\xf0?'
+DEBUG:PIL.TiffImagePlugin:tag: ModelTiepointTag (33922) - type: double (12) Tag Location: 189313752 - Data Location: 189316340 - value: <table: 48 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: GeoKeyDirectoryTag (34735) - type: short (3) Tag Location: 189313764 - Data Location: 189316388 - value: <table: 248 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: GeoDoubleParamsTag (34736) - type: double (12) Tag Location: 189313776 - Data Location: 189316636 - value: <table: 160 bytes>
+DEBUG:PIL.TiffImagePlugin:tag: GeoAsciiParamsTag (34737) - type: string (2) Tag Location: 189313788 - Data Location: 189316796 - value: b'GCS_HARTEBEESTHOEK_1994|\x00'
+DEBUG:PIL.TiffImagePlugin:tag: GDAL_METADATA (42112) - type: string (2) Tag Location: 189313800 - Data Location: 189316822 - value: <table: 98 bytes>
+INFO:pythonConfig:Created tiles for image: C:\Users\hatho\OneDrive\CASA\beam_update_2309\test-image\2020_RGB_10cm_CA_065.tif
+INFO:pythonConfig:Tiling time: 0:01:33.462953
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
+DEBUG:PIL.PngImagePlugin:STREAM b'IDAT' 41 65536
+INFO:pythonConfig:Inference time: 0:05:26.424431
+INFO:pythonConfig:Start creating shape file from mask for the file C:\Users\hatho\OneDrive\CASA\beam_update_2309\test-image\2020_RGB_10cm_CA_065.tif
+DEBUG:rasterio.env:Entering env context: <rasterio.env.Env object at 0x000001ED1DE85630>
+DEBUG:rasterio.env:Starting outermost env
+DEBUG:rasterio.env:No GDAL environment exists
+DEBUG:rasterio.env:New GDAL environment <rasterio._env.GDALEnv object at 0x000001ED1DE86FE0> created
+DEBUG:rasterio._filepath:Installing FilePath filesystem handler plugin...
+DEBUG:rasterio._env:GDAL_DATA found in environment.
+DEBUG:rasterio._env:PROJ_DATA found in environment.
+DEBUG:rasterio._env:Started GDALEnv: self=<rasterio._env.GDALEnv object at 0x000001ED1DE86FE0>.
+DEBUG:rasterio.env:Entered env context: <rasterio.env.Env object at 0x000001ED1DE85630>
+DEBUG:rasterio._base:Sharing flag: 0
+WARNING:rasterio._env:CPLE_AppDefined in The definition of geographic CRS EPSG:4148 got from GeoTIFF keys is not the same as the one from the EPSG registry, which may cause issues during reprojection operations. Set GTIFF_SRS_SOURCE configuration option to EPSG to use official parameters (overriding the ones from GeoTIFF keys), or to GEOKEYS to use custom values from GeoTIFF keys and drop the EPSG code.
+DEBUG:rasterio._base:Nodata success: 0, Nodata value: 0.000000
+DEBUG:rasterio._base:Nodata success: 0, Nodata value: 0.000000
+DEBUG:rasterio._base:Nodata success: 0, Nodata value: 0.000000
+DEBUG:rasterio._base:Nodata success: 0, Nodata value: 0.000000
+DEBUG:rasterio._base:Dataset <open DatasetReader name='C:/Users/hatho/OneDrive/CASA/beam_update_2309/test-image/2020_RGB_10cm_CA_065.tif' mode='r'> is started.
+DEBUG:rasterio.env:Exiting env context: <rasterio.env.Env object at 0x000001ED1DE85630>
+DEBUG:rasterio.env:Cleared existing <rasterio._env.GDALEnv object at 0x000001ED1DE86FE0> options
+DEBUG:rasterio._env:Stopped GDALEnv <rasterio._env.GDALEnv object at 0x000001ED1DE86FE0>.
+DEBUG:rasterio.env:Exiting outermost env
+DEBUG:rasterio.env:Exited env context: <rasterio.env.Env object at 0x000001ED1DE85630>
+DEBUG:rasterio.env:Entering env context: <rasterio.env.Env object at 0x000001ED1DE4C1F0>
+DEBUG:rasterio.env:Starting outermost env
+DEBUG:rasterio.env:No GDAL environment exists
+DEBUG:rasterio.env:New GDAL environment <rasterio._env.GDALEnv object at 0x000001ED1DE86FE0> created
+DEBUG:rasterio._env:GDAL_DATA found in environment.
+DEBUG:rasterio._env:PROJ_DATA found in environment.
+DEBUG:rasterio._env:Started GDALEnv: self=<rasterio._env.GDALEnv object at 0x000001ED1DE86FE0>.
+DEBUG:rasterio.env:Entered env context: <rasterio.env.Env object at 0x000001ED1DE4C1F0>
+DEBUG:rasterio.env:Exiting env context: <rasterio.env.Env object at 0x000001ED1DE4C1F0>
+DEBUG:rasterio.env:Cleared existing <rasterio._env.GDALEnv object at 0x000001ED1DE86FE0> options
+DEBUG:rasterio._env:Stopped GDALEnv <rasterio._env.GDALEnv object at 0x000001ED1DE86FE0>.
+DEBUG:rasterio.env:Exiting outermost env
+DEBUG:rasterio.env:Exited env context: <rasterio.env.Env object at 0x000001ED1DE4C1F0>
+DEBUG:rasterio.env:Entering env context: <rasterio.env.Env object at 0x000001ED1DE4C1F0>
+DEBUG:rasterio.env:Starting outermost env
+DEBUG:rasterio.env:No GDAL environment exists
+DEBUG:rasterio.env:New GDAL environment <rasterio._env.GDALEnv object at 0x000001ED1DE85630> created
+DEBUG:rasterio._env:GDAL_DATA found in environment.
+DEBUG:rasterio._env:PROJ_DATA found in environment.
+DEBUG:rasterio._env:Started GDALEnv: self=<rasterio._env.GDALEnv object at 0x000001ED1DE85630>.
+DEBUG:rasterio.env:Entered env context: <rasterio.env.Env object at 0x000001ED1DE4C1F0>
+DEBUG:rasterio.env:Exiting env context: <rasterio.env.Env object at 0x000001ED1DE4C1F0>
+DEBUG:rasterio.env:Cleared existing <rasterio._env.GDALEnv object at 0x000001ED1DE85630> options
+DEBUG:rasterio._env:Stopped GDALEnv <rasterio._env.GDALEnv object at 0x000001ED1DE85630>.
+DEBUG:rasterio.env:Exiting outermost env
+DEBUG:rasterio.env:Exited env context: <rasterio.env.Env object at 0x000001ED1DE4C1F0>
+DEBUG:rasterio._io:Path: _UnparsedPath(path='MEM:::DATAPOINTER=2122802520128,PIXELS=10000,LINES=10000,BANDS=1,DATATYPE=Float32'), mode: r+, driver: None
+DEBUG:rasterio._base:Nodata success: 0, Nodata value: 0.000000
+DEBUG:fiona.session:Could not import boto3, continuing with reduced functionality.
+DEBUG:fiona._env:GDAL_DATA found in environment.
+DEBUG:fiona._env:PROJ_DATA found in environment.
+DEBUG:fiona._env:GDAL_DATA found in environment.
+DEBUG:fiona._env:PROJ_DATA found in environment.
+DEBUG:fiona.ogrext:File doesn't exist. Creating a new one...
+DEBUG:fiona._env:GDAL_DATA found in environment.
+DEBUG:fiona._env:PROJ_DATA found in environment.
+DEBUG:fiona._env:GDAL_DATA found in environment.
+DEBUG:fiona._env:PROJ_DATA found in environment.
+DEBUG:fiona.ogrext:Created layer 2020_RGB_10cm_CA_065.tif_predicted
+DEBUG:fiona.ogrext:Writing started
+DEBUG:fiona._env:GDAL_DATA found in environment.
+DEBUG:fiona._env:PROJ_DATA found in environment.
+DEBUG:fiona.ogrext:Transaction supported: 0
+DEBUG:fiona.ogrext:Flushed data source cache
+DEBUG:fiona.collection:Flushed buffer
+DEBUG:fiona.collection:Stopped session
+INFO:pythonConfig:Total Time: 0:05:44.819012

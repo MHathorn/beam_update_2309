@@ -59,6 +59,8 @@ def get_msk(*_):
 def get_y_augmented(*_):
     pass
 
+def get_y(*_):
+    pass
 
 @app.on_event("startup")
 async def startup_event():
