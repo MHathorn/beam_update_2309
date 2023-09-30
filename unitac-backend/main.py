@@ -22,6 +22,7 @@ import rasterio
 import rasterio.features
 import shapely.geometry
 import geopandas as gpd
+import cv2
 
 from log_management import log
 
@@ -284,6 +285,9 @@ def create_shp_from_mask(file, mask_array):
         )
         return
     mask_array = np.array(mask_array)
+    # dilate the mask with 3x3 kernel (reverse of erosion applied in training preprocessing)
+    kernel = np.ones((3, 3), np.uint8)
+    mask_array = cv2.dilate(mask_array, kernel, iterations=1)    
     shapes = rasterio.features.shapes(mask_array, transform=raster_meta["transform"])
     polygons = [
         shapely.geometry.Polygon(shape[0]["coordinates"][0]) for shape in shapes

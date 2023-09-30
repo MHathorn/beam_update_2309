@@ -1,0 +1,14 @@
+Index: utils/my_paths.py
+===================================================================
+diff --git a/utils/my_paths.py b/utils/my_paths.py
+--- a/utils/my_paths.py	
++++ b/utils/my_paths.py	
+@@ -1,6 +1,7 @@
+ from os.path import join
+ 
+ # insert here the full path to the root folder of your images
+-ROOT_PATH = r'/Users/wassimbrahim/Desktop/BEAM_training_material/Segmentation Data'
++ROOT_PATH = r'C:\Users\dmz-admin\Desktop\BEAM_training_material\Data Segmentation'
++
+ MODEL_DIR = join(ROOT_PATH, r'model', r'wassim')
+ CODES = ['Background', 'Building']
