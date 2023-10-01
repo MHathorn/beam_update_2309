@@ -5,6 +5,7 @@ call "%MAMBAPATH%\Scripts\activate.bat" beam_test
 echo %cd%
 python ./unitac-backend/updates.py 
 
+
 if [ $? -eq 0 ]; then
     echo OK
 else

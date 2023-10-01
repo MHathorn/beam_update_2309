@@ -1,6 +1,6 @@
 REM Activate environment
 set MAMBAPATH=%USERPROFILE%\mambaforge
-call "%MAMBAPATH%\Scripts\activate.bat" beam_test
+call "%MAMBAPATH%\Scripts\activate.bat" beam
 
 echo %cd%
 start "frontend" unitac-frontend-win_x64.exe 

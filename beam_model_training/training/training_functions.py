@@ -63,14 +63,7 @@ class DualFocalLoss(nn.Module):
 
 
 # Set path of root folder of images and masks
-path = Path(join(p.ROOT_PATH, 'aerial'))
-
-
-# path = Path(f'C:\Users\dmz-admin\Desktop\BEAM_training_material\Data Segmentation\aerial')
-
-# Set codes
-# codes = ['Background', 'Building']
-
+path = p.ROOT_PATH
 
 def n_codes(fnames, is_partial=True):
     '''Gather the codes from a list of fnames'''
@@ -94,17 +87,7 @@ def get_msk(fn, p2c):
     '''Grab a mask from a filename and adjust the pixels based on p2c'''
     pix2class = n_codes(lbl_names)
     # old structure: fn = f'{path}/buildings_mask_tiles/2019_10cm_RGB_BE_67/{tile_type}/{fn.stem[:-3]}lbl{fn.suffix}'
-    fn = str(fn).replace('image_tiles', 'buildings_mask_tiles')
-    msk = np.array(PILMask.create(fn))
-    mx = np.max(msk)
-    for i, val in enumerate(p2c):
-        msk[msk == p2c[i]] = val
-    return PILMask.create(msk)
-
-
-def get_msk_augmented(fn, p2c):
-    '''Grab a mask from a `filename` and adjust the pixels based on `pix2class`'''
-    fn = str(fn).replace('img', 'lbl')
+    fn = str(fn).replace('image_tiles', 'mask_tiles')
     msk = np.array(PILMask.create(fn))
     mx = np.max(msk)
     for i, val in enumerate(p2c):
@@ -114,10 +97,6 @@ def get_msk_augmented(fn, p2c):
 
 def get_y(o):
     return get_msk(o, p2c)
-
-
-def get_y_augmented(o):
-    return get_msk_augmented(o, p2c)
 
 
 def batch_size(backbone, tile_size):
@@ -157,45 +136,35 @@ def get_tile_size(tile_type):
     return tile_size
 
 
-def check_fnames_lbls(tile_type, augmented=None):
+def check_fnames_lbls(tile_type):
     '''Get images and labels for dataloader and check whether their number is equal'''
     global fnames, lbl_names, path
-    if augmented == False:
-        # path = Path(f'C:\Users\dmz-admin\Desktop\BEAM_training_material\Data Segmentation\aerial')  # change this to your data
-        # old structure: fnames = get_image_files(f'{path}/image_tiles/2019_10cm_RGB_BE_67/{tile_type}')
-        # old structure: lbl_names = get_image_files(f'{path}/buildings_mask_tiles/2019_10cm_RGB_BE_67/{tile_type}')
-        fnames = get_image_files(join(p.ROOT_PATH, 'aerial', 'image_tiles'))
-        lbl_names = get_image_files(join(p.ROOT_PATH, 'aerial', 'buildings_mask_tiles'))
-    elif augmented == True:
-        path = Path(f'/content/drive/MyDrive/Segmentation Data/aerial/augmented/8/0.2')  # change this to your data
-        fnames = get_image_files(path / 'img')
-        lbl_names = get_image_files(path / 'lbl')
+    fnames = get_image_files(join(p.ROOT_PATH, 'image_tiles'))
+    lbl_names = get_image_files(join(p.ROOT_PATH, 'mask_tiles'))
     if len(fnames) != len(lbl_names):
         print('ERROR: unequal number of image and mask tiles!')
     return fnames, lbl_names, path
 
 
 def callbacks(model_dir, architecture, backbone, fit_type, timestamp):
-    '''Log results in CSV, show progress, and stop early if dice coefficient doesn't improve for 10 epochs'''
+    '''Log results in CSV, show progress in graph'''
     cbs = [CSVLogger(fname=f'{model_dir}/{architecture}_{backbone}_{fit_type}_{timestamp()}.csv', append=True),
            ShowGraphCallback()]
     return cbs
 
 
-def check_dataset_balance(tile_type, augmented=None):
+def check_dataset_balance(tile_type):
     '''Check, how balanced the dataset is'''
     global tile_size, p2c
     tile_size = get_tile_size(tile_type)
 
     # Check if there is a label for each image
-    fnames, lbl_names, path = check_fnames_lbls(tile_type, augmented)
+    fnames, lbl_names, path = check_fnames_lbls(tile_type)
     # Get codes of masks
     p2c = n_codes(lbl_names)
 
-    if augmented == False:
-        label_func = get_y
-    elif augmented == True:
-        label_func = get_y_augmented
+    label_func = get_y
+
 
     # Create dataloader to check building pixels
     dls = SegmentationDataLoaders.from_label_func(path, fnames, label_func=label_func, bs=64, codes=p.CODES, seed=2)
