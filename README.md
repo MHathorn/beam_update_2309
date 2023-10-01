@@ -12,4 +12,6 @@ Model weights can be found at [LINK].
 
 ## Training
 
-Training scripts are in the 'training' directory. Full documentation and instructions can be found by following the notebooks in the 'notebooks' directory. 
+Training scripts are in the 'training' directory. Update the paths in utils/my_paths.py to your image locations before running.
+
+Full documentation and instructions can be found by following the notebooks in the 'notebooks' directory. 

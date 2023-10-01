@@ -23,7 +23,7 @@ def create_if_not_exists(folder_path):
         os.makedirs(folder_path)
 
 
-def tile_img_msk(image_path, mask_type, tile_size: int):
+def tile_img_msk(image_path, tile_size: int):
     """
      Loop through all images in the given folder,splits images and corresponding masks into smaller tiles and save
      them.
@@ -33,11 +33,10 @@ def tile_img_msk(image_path, mask_type, tile_size: int):
     """
     for fn in tqdm(image_path):
         output_path = fn.parent.parent
-        mask_tiles_path = join(output_path, '{mask_type}_mask_tiles')
+        mask_tiles_path = join(output_path, 'mask_tiles')
         create_if_not_exists(mask_tiles_path)
         img = np.array(PILImage.create(fn))
-        # todo see how to correct this !!!
-        msk_fn = str(fn).replace('images', join('untiled masks', mask_type))
+        msk_fn = str(fn).replace('images', 'untiled masks')
         msk = np.array(PILMask.create(msk_fn))
         x, y, _ = img.shape
         # Cut tiles and save them
@@ -47,7 +46,7 @@ def tile_img_msk(image_path, mask_type, tile_size: int):
                 msk_tile = msk[i * tile_size:(i + 1) * tile_size, j * tile_size:(j + 1) * tile_size]
                 Image.fromarray(img_tile).save(join(output_path, 'image_tiles', f'{fn.name[:-4]}_{i}_{j}.png'))
                 Image.fromarray(msk_tile).save(
-                    join(output_path, f'{mask_type}_mask_tiles', f'{fn.name[:-4]}_{i}_{j}.png'))
+                    join(output_path, f'mask_tiles', f'{fn.name[:-4]}_{i}_{j}.png'))
 
 
 def tile_img(image_path, output_path, tile_size: int, single=None):
@@ -153,27 +152,3 @@ def save_masks(images, mask, maskdir):
             generate_mask(image, mask, maskdir, shapes)
 
 
-def tile_img_msk(image_path, mask_type, tile_size: int):
-    """
-     Loop through all images in the given folder,splits images and corresponding masks into smaller tiles and save
-     them.
-    :param image_path:
-    :param tile_size:
-    :return:
-    """
-    for fn in tqdm(image_path):
-        output_path = fn.parent.parent
-        create_if_not_exists(join(output_path, 'image_tiles'))
-        create_if_not_exists(join(output_path, f'{mask_type}_mask_tiles'))
-        img = np.array(PILImage.create(fn))
-        msk_fn = str(fn).replace('images', join('untiled masks', mask_type))
-        msk = np.array(PILMask.create(msk_fn))
-        x, y, _ = img.shape
-        # Cut tiles and save them
-        for i in range(x // tile_size):
-            for j in range(y // tile_size):
-                img_tile = img[i * tile_size:(i + 1) * tile_size, j * tile_size:(j + 1) * tile_size]
-                msk_tile = msk[i * tile_size:(i + 1) * tile_size, j * tile_size:(j + 1) * tile_size]
-                Image.fromarray(img_tile).save(join(output_path, 'image_tiles', f'{fn.name[:-4]}_{i}_{j}.png'))
-                Image.fromarray(msk_tile).save(
-                    join(output_path, f'{mask_type}_mask_tiles', f'{fn.name[:-4]}_{i}_{j}.png'))

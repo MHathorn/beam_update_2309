@@ -40,15 +40,15 @@ def u_net_model_training(tile_type, backbone, fit_type, epochs, architecture='U-
 
     # Create model
     if backbone == 'resnet18':
-        learn = unet_learner(dls, resnet18, n_out=2, loss_func=DualFocalLoss(), metrics=[Dice(), JaccardCoeff()]
+        learn = unet_learner(dls, resnet18, n_out=2, loss_func=None, metrics=[Dice(), JaccardCoeff()]
                              # Dice coefficient since dataset is imbalanced
                              ).to_fp16()  # 16-bits floats, which take half the space in RAM
     elif backbone == 'resnet34':
-        learn = unet_learner(dls, resnet34, n_out=2, loss_func=DualFocalLoss(), metrics=[Dice(), JaccardCoeff()]).to_fp16()
+        learn = unet_learner(dls, resnet34, n_out=2, loss_func=None, metrics=[Dice(), JaccardCoeff()]).to_fp16()
     elif backbone == 'resnet50':
-        learn = unet_learner(dls, resnet50, n_out=2, loss_func=DualFocalLoss(), metrics=[Dice(), JaccardCoeff()]).to_fp16()
+        learn = unet_learner(dls, resnet50, n_out=2, loss_func=None, metrics=[Dice(), JaccardCoeff()]).to_fp16()
     elif backbone == 'resnet101':
-        learn = unet_learner(dls, resnet101, n_out=2, loss_func=DualFocalLoss(), metrics=[Dice(), JaccardCoeff()]).to_fp16()
+        learn = unet_learner(dls, resnet101, n_out=2, loss_func=None, metrics=[Dice(), JaccardCoeff()]).to_fp16()
 
     learn.fit_one_cycle(epochs, cbs=callbacks(p.MODEL_DIR, architecture, backbone, fit_type, timestamp))
     return learn, dls
