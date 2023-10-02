@@ -8,8 +8,8 @@ from packaging import version # Import the packaging module
 
 # Define the constants
 LOCAL_VERSION_FILE = os.path.join(os.getcwd(), "unitac-backend", "version.txt") # The path of the file on your local machine that contains the current version of your application
-GITHUB_VERSION_URL = "https://raw.githubusercontent.com/MHathorn/beam_update_2309/main/unitac-backend/version.txt" # The URL of the file on GitHub that contains the latest version number
-GITHUB_FILE_URL = "https://raw.githubusercontent.com/MHathorn/beam_update_2309/main/unitac-backend/" # The URL of the directory on GitHub that contains the updated files
+GITHUB_VERSION_URL = "https://raw.githubusercontent.com/UNITAC-Hamburg/beam_update_2309/main/unitac-backend/version.txt" # The URL of the file on GitHub that contains the latest version number
+GITHUB_FILE_URL = "https://raw.githubusercontent.com/UNITAC-Hamburg/beam_update_2309/main/unitac-backend/" # The URL of the directory on GitHub that contains the updated files
 LOCAL_FILE_PATH = os.path.join(os.getcwd(), "unitac-backend") # The path of the directory on your local machine that contains the files to be updated
 
 # Create a Tkinter window

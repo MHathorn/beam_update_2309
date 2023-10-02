@@ -1,3 +1,7 @@
+REM Activate environment
+set MAMBAPATH=%USERPROFILE%\mambaforge
+call "%MAMBAPATH%\Scripts\activate.bat" beam
+
 echo %cd%
 start "frontend" unitac-frontend-win_x64.exe 
 python -W ignore ../unitac-backend/init.py 
@@ -8,6 +12,9 @@ if [ $? -eq 0 ]; then
 else
     echo FAIL
 fi
+
+REM Deactivate the virtual environment
+call "%MAMBAPATH%\Scripts\deactivate.bat"
 
 exit 0
 

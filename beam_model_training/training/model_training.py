@@ -65,5 +65,5 @@ learn, dls = hrnet_model_training(tile_type, backbone, fit_type, epochs, archite
 
 """## Save models"""
 
-model_save_path = join(p.ROOT_PATH, 'new_model', 'model_exported.pkl')
+model_save_path = join(p.MODEL_DIR, 'f{timestamp}_model_exported.pkl')
 learn.export(model_save_path)
