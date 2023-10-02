@@ -17,7 +17,7 @@ Packaged dependencies (for offline installation) can be found at [LINK].
 Training scripts are in the 'training' directory. Update the paths in utils/my_paths.py to your image locations before running. 
 
 Recommended folder structure (set the location of project_directory to 'ROOT_PATH' in my_paths.py): 
-
+```
 ├── project_directory
 │   ├── images
 │   │   ├── image.tiff
@@ -25,5 +25,6 @@ Recommended folder structure (set the location of project_directory to 'ROOT_PAT
 │   │   ├── label.shp
 │   ├── models
 │   │   ├── saved_models.pkl
+```
 
 Full documentation and instructions for training can be found by following the notebooks in the 'notebooks' directory. 
