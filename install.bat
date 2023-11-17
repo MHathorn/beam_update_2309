@@ -2,7 +2,7 @@
 
 set ORIGDIR="%CD%"
 
-set MAMBAPATH=%USERPROFILE%\mambaforge
+set MAMBAPATH=%USERPROFILE%\AppData\Local\mambaforge
 set MAMBAEXE=%TEMP%\%RANDOM%-%RANDOM%-%RANDOM%-%RANDOM%-mambainstall.exe
 set "OS="
 set "MCLINK="
