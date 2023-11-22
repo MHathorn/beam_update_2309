@@ -1,17 +1,16 @@
 from pathlib import Path
 import shutil
-import sys
-import rasterio
-from rasterio.features import rasterize
+
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-import os
 
+import rasterio
+from rasterio.features import rasterize
+import rioxarray as rxr
 from shapely import wkt
 from shapely.geometry import box, Polygon
 from shapely.ops import unary_union
-from PIL import Image
 from cv2 import erode
 
 class DataTiler:
@@ -22,63 +21,67 @@ class DataTiler:
     img_tiler = DataTiler(image_path, output_dir, labels_path) (labels_path optional)
     img_tiler.generate_tiles(tile_size)
     """
-    def __init__(self, image_path, output_dir, vector_labels=None):
-            self.image_path = Path(image_path)
+    def __init__(self, image_dir, output_dir, labels_path=None):
+            self.images = self.load_images(image_dir)
             self.output_dir = Path(output_dir)
-            self.has_labels = (vector_labels is not None)
-            self.vector_labels = Path(vector_labels) if self.has_labels else None
-            self.directory_structure = {
-                'image_tiles': self.create_subdirectory(output_dir / 'image_tiles'),
-                'tmp': self.create_subdirectory(output_dir / 'tmp')
+            if not self.output_dir.exists():
+                self.create_subdir(output_dir)
+            self.dir_structure = {
+                'image_tiles': self.create_subdir(output_dir / 'image_tiles'),
             }
             
             # Prepare data for tiling
-            self.load_image(image_path)
-            if self.has_labels:
-                self.load_labels(vector_labels)
-                print(f"Loaded vector labels from {self.vector_labels.name}.")
-                self.directory_structure['mask_tiles'] = self.create_subdirectory(output_dir / 'mask_tiles')
+            if labels_path:
+                self.dir_structure['mask_tiles'] = self.create_subdir(output_dir / 'mask_tiles')
+                # Loading labels from csv / shapefile.
+                labels_path = Path(labels_path)
+                self.labels = self.load_labels(labels_path)
+                print(f"Loaded vector labels from {labels_path.name}.")
+                
             else:
+                self.labels = None
                 print(f"Warning: No mask file provided. Tiling images alone.")
 
-    def load_image(self, image_path):
+    def load_images(self, image_dir):
         """
-        Loads an RGB image from self.image_path. 
-
-        Note: Only supporting Worldview-3 so far.
-        TODO: Expand to aerial, other satellites if/when needed.
-        TODO: Keep georeferences throughout tiling and training.
+        Loads all GeoTIFF images in the provided image_dir with rioxarray
+        
+        Parameters:
+        image_dir (PosixPath | str): Path to the directory containing images.
 
         Returns:
-            np.array: RGB bands stacked in a numpy array.
+        xarray.DataArray: All bands stacked in a multidimensional array.
         """
-        with rasterio.open(image_path) as image:
-            if image.count == 8:
-                self.image = image.read([4, 2, 1])
-                print(f"Loaded RGB image from Worldview-3-identified imagery in {self.image_path.name}.")
-            elif image.count == 4:
-                self.image = image.read()
-                print(f"Loaded RGB image from aerial imagery  in {self.image_path.name}.")
-            else:
-                raise TypeError("The imagery provided is not supported yet.")
-            self.image_meta = image.meta
+        filepaths = [img_path for ext in ["*.tif", "*.tiff", "*.TIF", "*.TIFF"] for img_path in Path(image_dir).rglob(ext)]
+        if not filepaths:
+            raise IOError(f"The directory {image_dir} does not contain any GeoTIFF images.")
+        
+        images = [rxr.open_rasterio(img_path, default_name=img_path.stem) for img_path in filepaths]
+        # Unifying crs across images
+        target_crs = images[0].rio.crs
+        return [img.rio.reproject(target_crs) for img in images]
+            
 
 
-    def load_labels(self, vector_labels):
+    def load_labels(self, labels_path):
         """
         This loads building footprints from a vector file and stores them as an object attribute.
         TODO: Add support for other mask types beyond Open Buildings Dataset.
+
+        Parameters:
+        labels_path (PosixPath): Path to the file containing labels (csv or shp).
         """
-        if vector_labels.suffix.lower() == '.csv':
-            df = pd.read_csv(vector_labels)
+        if labels_path.suffix.lower() == '.csv':
+            # Expecting here Google's Open Buildings Dataset format.
+            df = pd.read_csv(labels_path)
             df['geometry'] = df['geometry'].apply(wkt.loads)
             buildings = gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
-        elif vector_labels.suffix.lower() == '.shp':
-            buildings = gpd.read_file(vector_labels)
-        self.labels = self.crop_buildings(buildings)
+        elif labels_path.suffix.lower() == '.shp':
+            buildings = gpd.read_file(labels_path)
+        return self.crop_labels(buildings)
             
     
-    def crop_buildings(self, buildings):
+    def crop_labels(self, buildings):
         """
         Crop the building geometries to the bounding box of the satellite image.
 
@@ -89,43 +92,37 @@ class DataTiler:
         GeoDataFrame: A GeoDataFrame containing only the building geometries that intersect with 
                     the bounding box of the input image.
         """
-        with rasterio.open(self.image_path) as sat_image:
-            bounds = sat_image.bounds
-            bounding_box = box(*bounds)
-            buildings = buildings.to_crs(sat_image.crs)
+        bounding_boxes = [box(*img.rio.bounds()) for img in self.images]
+        union_bounding_box = unary_union(bounding_boxes)
+        buildings = buildings.to_crs(self.images[0].rio.crs)
 
-        return buildings[buildings.intersects(bounding_box)]
+        return buildings[buildings.intersects(union_bounding_box)]
 
 
-    def create_subdirectory(self, dir):
+    def create_subdir(self, dir):
         """
         Create a subdirectory if it does not exist. If the directory exists and is not empty,
-        it prompts the user to confirm whether they want to overwrite all files in the directory.
+        files will get overwritten.
 
         Parameters:
-        dir (str): The path of the directory to be created.
+        dir (PosixPath | str): The path of the directory to be created.
 
         Returns:
-        PosixPath: The path of the created directory if successful, otherwise it terminates the program.
+        PosixPath: The path of the created directory.
 
-        Raises:
-        SystemExit: If the user cancels the operation when prompted to confirm overwriting of non-empty directory.
         """
-        if not os.path.exists(dir):
-            os.makedirs(dir)
-        elif len(os.listdir(dir)) > 0:
-            confirm = input(f"Directory {dir.name} is not empty, are you sure you want to overwrite all files? (y/n): ")
-            if confirm.lower() == 'y':
-                shutil.rmtree(dir)  # Delete the directory and its contents
-                os.makedirs(dir)   
-            else:
-                print("Operation cancelled by user.")
-                sys.exit()
-        return dir
+        dir_path = Path(dir)
+        if not dir_path.exists():
+            dir_path.mkdir(parents=True)
+        elif any(dir_path.iterdir()):
+            print(f"Warning: Output directory is not empty. Overwriting files.")
+            shutil.rmtree(dir_path)  # Delete the directory and its contents
+            dir_path.mkdir(parents=True)
+        return dir_path
          
 
     
-    def generate_mask(self, write=True):
+    def generate_mask(self, image, write=False):
         """
         Generate a binary mask from a vector file (shp or geojson).
 
@@ -145,40 +142,46 @@ class DataTiler:
             return new_poly
 
         label_polygons = []
-        image_size = (self.image_meta['height'], self.image_meta['width'])
+        image_size = (image.shape[1], image.shape[2])
+        transform = image.rio.transform()
         for _, row in self.labels.iterrows():
             if row['geometry'].geom_type == 'MultiPolygon':
                 for label_geom in row['geometry'].geoms: 
                     # iterate over polygons within a MultiPolygon
-                    label = poly_from_utm(label_geom, self.image_meta['transform'])
+                    label = poly_from_utm(label_geom, transform)
                     label_polygons.append(label)
             elif row['geometry'].geom_type == 'Polygon':
-                label = poly_from_utm(row['geometry'], self.image_meta['transform'])
+                label = poly_from_utm(row['geometry'], transform)
                 label_polygons.append(label)
             else:
                 # raise an error or skip the object
                 raise TypeError("Invalid geometry type")
 
         if len(label_polygons) > 0:
-            mask = rasterize(shapes=label_polygons, out_shape=image_size)
+            mask = rasterize(shapes=label_polygons, 
+                             out_shape=image_size, 
+                             default_value=255, 
+                             dtype="uint8")
         else:
-            mask = np.zeros(image_size)
+            mask = np.full(image_size, 0, dtype=np.uint8)
 
-        # Save or show mask
+        # Erode mask
         kernel = np.ones((3, 3), np.uint8)
         mask = erode(mask, kernel, iterations=1)
-        mask = mask.astype('uint8') * 255 # Change 255 to 1 if classes need to be 0 and 1
-        if write:
-            mask_meta = self.image_meta.copy()
-            mask_meta.update({'count': 1})
 
-            mask_path = self.directory_structure['tmp'] / f"{self.image_path.stem}_mask{self.image_path.suffix}"
-            
-            with rasterio.open(mask_path, 'w', **mask_meta) as dst:
-                dst.write(mask, 1) # Change 255 to 1 if classes need to be 0 and 1
-            print(f"Saved mask for {self.image_path.name}.")
-        else:
+        # Save or return mask
+        if not write:
             return mask
+        
+        mask_meta = image.rio.meta.copy()
+        mask_meta.update({'count': 1})
+
+        mask_path = self.dir_structure['tmp'] / f"{image.name}_mask.tif"
+        
+        with rasterio.open(mask_path, 'w', **mask_meta) as dst:
+            dst.write(mask, 1) 
+        print(f"Saved mask for {image.name}.")
+
     
     def generate_tiles(self, tile_size):
         """
@@ -189,31 +192,38 @@ class DataTiler:
         
         """
 
-        if self.image_path.suffix.lower() in ['.tif', '.tiff']:
-            print(f"Tiling image {self.image_path}...")
+        for image in self.images:
+            print(f"Tiling image {image.name}...")
             # Load image and corresponding mask as numpy array and retrieve their shape
 
-            if self.has_labels:
-                mask = self.generate_mask(False)
-            _, x, y = self.image.shape
-            print(x, y)
+            if self.labels:
+                mask = self.generate_mask(image)
 
-            x_tiles = x // tile_size
-            y_tiles = y // tile_size
+            x_tiles = image.sizes['x'] // tile_size
+            y_tiles = image.sizes['y'] // tile_size
+            total_tiles = x_tiles * y_tiles
 
-            # Cut image and mask into tiles and store them as .png-files
+            if total_tiles == 0:
+                raise IOError(f"tile_size is bigger than the input image for {image.name} ({image.sizes['x']}, {image.sizes['y']}). \
+                              Please choose a smaller tile size or a different image.")
+
+            # Cut image and mask into tiles and store them as .tif-files
             for i in range(x_tiles):
                 for j in range(y_tiles):
 
-                    img_tile = self.image[:, i*tile_size:(i+1)*tile_size, j*tile_size:(j+1)*tile_size]
-                    Image.fromarray(img_tile.transpose((1, 2, 0))).save(self.directory_structure['image_tiles'] / f'{self.image_path.stem}_r{i}_c{j}.png')
-                    if self.has_labels:
-                        msk_tile = mask[i*tile_size:(i+1)*tile_size, j*tile_size:(j+1)*tile_size]
-                        Image.fromarray(msk_tile).save(self.directory_structure['mask_tiles'] / f'{self.image_path.stem}_r{i}_c{j}.png')
+                    img_tile = image.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
+                    tile_path = self.dir_structure['image_tiles'] / f'{image.name}_r{i}_c{j}.TIF'
+                    img_tile.rio.to_raster(tile_path)
+
+                    if self.labels:
+                        msk_tile = mask.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
+                        msk_path = self.dir_structure['mask_tiles'] / f'{image.name}_r{i}_c{j}.TIF'
+                        msk_tile.rio.to_raster(msk_path)
             
-            print(f"Tiled {self.image_path.name} into {x_tiles * y_tiles} tiles in folder `image_tiles`.")
-            if self.has_labels:
-                print(f"Generated {x_tiles * y_tiles} binary mask tiles in folder `mask_tiles`.")
+            print(f"Tiled {image.name} into {total_tiles} tiles in folder `image_tiles`.")
+            
+            if self.labels:
+                print(f"Generated {total_tiles} binary mask tiles in folder `mask_tiles`.")
 
 
             
