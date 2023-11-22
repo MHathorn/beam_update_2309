@@ -1,11 +1,11 @@
 # BEAM_model_traning
 
-Recommended folder structure (set the location of project_directory to 'ROOT_PATH' in my_paths.py):
+The expected folder structure is as follow (set the location of project_directory to 'ROOT_PATH' in my_paths.py):
 
 ├── project_directory
-│ ├── images
+│ ├── images // A list of files in GeoTIFF format.
 │ │ ├── image.tiff
-│ ├── labels
+│ ├── labels // A shapefile or csv file (in Google Open Buildings Dataset format) containing all labels for the included images.
 │ │ ├── label.shp
 │ ├── models
 │ │ ├── saved_models.pkl
