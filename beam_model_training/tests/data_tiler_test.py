@@ -4,78 +4,87 @@ from tiling.data_tiler import DataTiler
 import geopandas as gpd
 from pathlib import Path
 import rasterio
+import time
 
 class Test_DataTiler:
-    @pytest.fixture(autouse=True)
-    def setup_method(self, tmp_path):
-        print("\nSetup...")
     
-        # Create subdirectories for image_dir and output_dir
-        test_dirs = {
-            "aerial": Path("beam_model_training/tests/aerial"),
-            "satellite": Path("beam_model_training/tests/satellite")
-        }
+    @pytest.fixture(scope="class", params=["aerial_training", 
+                                           "aerial_inference", 
+                                           "aerial_single", 
+                                           "satellite_training", 
+                                           "satellite_inference"])
+    def name(self, request):
+            return request.param
 
-        self.data_tilers = {name: DataTiler(dir) for name, dir in test_dirs.items()}
-
-
-    def teardown_method(self, method):
-        print("\nTearing down test...")
-        # Remove the image file
-        for data_tiler in self.data_tilers.values():
-            output_path = data_tiler.input_path / "tiles"
-            shutil.rmtree(output_path)
-
-    def test_load_images(self):
-        for data_tiler in self.data_tilers.values():
-            assert data_tiler.images  # This will check if images is not empty
-
-
-    # Add code to the following test methods
-    def test_load_labels(self):
-        for data_tiler in self.data_tilers.values():
-            assert isinstance(data_tiler.labels, gpd.GeoDataFrame), "Object is not a GeoDataFrame"
-
-
-    def test_crop_buildings(self):
-        pass
-
-    def test_create_subdir(self):
-        for data_tiler in self.data_tilers.values():
-            assert (data_tiler.input_path / "tiles").exists()
-            assert (data_tiler.input_path / 'tiles/images').exists()
-            if data_tiler.labels is not None:
-                assert (data_tiler.input_path / 'tiles/masks').exists()
-
-    def test_generate_mask(self):    
-
-        pass
-
-
-    def test_generate_tiles(self):
+    @pytest.fixture
+    def data_tiler(self, name, tmp_path_factory):
+        tmp_path = tmp_path_factory.mktemp("data_tiler_test")
+        input_path = Path("beam_model_training/tests") / name.split('_')[0]
+        dir = tmp_path / name
         
-        # Assuming generate_tiles takes tile_size as an argument and populates 'image_tiles' directory with tile images
-        for data_tiler in self.data_tilers.values():
-            data_tiler.generate_tiles(tile_size=512, write_tmp_files=True)
+        
+        dir.mkdir(parents=True, exist_ok=True)
+        (dir / "labels").mkdir(parents=True, exist_ok=True)
+        # Copy labels expect for inference tests
+        if not name.endswith('inference'):
+            for file in (input_path / 'labels').iterdir():
+                shutil.copy2(file, dir / 'labels')
 
-            image_dir = data_tiler.dir_structure.get('image_tiles')
-            image_files = list(image_dir.glob('*.TIF'))
+        (dir / "images").mkdir(parents=True, exist_ok=True)
+        image_files = list((input_path / "images").iterdir())
+        copy_count = 1 if name.endswith('single') else len(image_files)
+        for file in image_files[:copy_count]:
+                shutil.copy2(file, dir / 'images')
+        try:
+            yield DataTiler(dir)
+        finally:
+            # Clean up after tests.
+            time.sleep(3)
+            shutil.rmtree(dir)
 
-            assert len(image_files) == 8
+    def test_load_images(self, name, data_tiler):
+        assert data_tiler.images, f"{name}: Images object should not be empty."
+        expected_length = 1 if name.endswith('single') else 2
+        assert len(data_tiler.images) == expected_length, f"{name}: Expecting a list of {expected_length} images."
 
+    def test_load_labels(self, name, data_tiler):
+        if name.endswith('inference'):
+            assert data_tiler.labels is None, f"{name}: Expecting empty labels for inference."
+        else:
+            assert isinstance(data_tiler.labels, gpd.GeoDataFrame), f"{name}: Object is not a GeoDataFrame"
+
+    def test_crop_buildings(self, name, data_tiler):
+        if name.endswith('single'):
+            labels_path = data_tiler.input_path / 'labels' / ('AERIAL_TEST_LABELS.shp' if name.startswith('aerial') else 'SAT_TEST_LABELS.csv')
+            input_labels = data_tiler.load_labels(labels_path, crop=False)
+            input_label_bbox = input_labels.total_bounds
+            cropped_labels_bbox = data_tiler.labels.to_crs("EPSG:4326").total_bounds
+
+            assert cropped_labels_bbox[2] - cropped_labels_bbox[0] < input_label_bbox[2] - input_label_bbox[0], f"{name}: Widths of the cropped labels should be reduced."
+            assert cropped_labels_bbox[3] - cropped_labels_bbox[1] < input_label_bbox[3] - input_label_bbox[1], f"{name}: Heights of the cropped labels should be reduced."
+
+    def test_generate_tiles(self, name, data_tiler):
+        data_tiler.generate_tiles(tile_size=512, write_tmp_files=True)
+
+        image_dir = data_tiler.dir_structure.get('image_tiles')
+        image_files = list(image_dir.glob('*.TIF'))
+
+        expected_files = 4 if name.endswith('single') else 8
+        assert len(image_files) == expected_files
+
+        if not name.endswith('inference'):
             mask_dir = data_tiler.dir_structure.get('mask_tiles')
-            mask_files = list(image_dir.glob('*.TIF'))
-    
-            assert len(image_files) == len(mask_files), "Number of images and label masks does not match."
-    
+            mask_files = list(mask_dir.glob('*.TIF'))
+
+            assert len(image_files) == len(mask_files), f"{name}: Number of images and mask tiles do not match."
+
             for image_file in image_files:
                 # Remove '_mask.tif' from the end of the corresponding mask file name
                 mask_file_name = f"{image_file.stem}_mask.tif"
                 mask_file = mask_dir / mask_file_name
-        
+
                 assert mask_file.exists()
-        
+
                 with rasterio.open(image_file) as image, rasterio.open(mask_file) as mask:
-                    assert image.crs == mask.crs, "Image and mask CRS do not match"
-                    assert image.transform == mask.transform, "Image and mask transform do not match"
-    
+                    assert image.crs == mask.crs, f"{name}: Image and mask CRS do not match"
+                    assert image.transform == mask.transform, f"{name}: Image and mask transform do not match"

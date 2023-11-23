@@ -50,17 +50,23 @@ class DataTiler:
             }
             
             # Checking for masks and loading if exist
-            labels = set(labels_path for ext in ["*.csv", "*.shp"] for labels_path in (self.input_path / "labels").rglob(ext))
-            if not labels:
+            label_paths = list((self.input_path / "labels").iterdir())
+            valid_label_paths = [l for l in label_paths if l.suffix in ['.csv', '.shp']]
+            if not valid_label_paths:
                 self.labels = None
-                print(f"No mask file provided. Tiling images alone.")
-            elif len(labels) > 1:
-                print(labels)
+                if len(label_paths) > 0:
+                    print("Warning: Label files are not in recognized format (shp, csv). Tiling images alone.")
+                else:
+                    print(f"No labels file provided. Tiling images alone.")
+            
+            elif len(valid_label_paths) > 1:
+                print(valid_label_paths)
                 raise IOError("More than one labels file detected. Please provide a single labels file.")
+            
             else:
                 self.dir_structure['mask_tiles'] = self.create_subdir(self.output_dir / 'masks')
                 # Loading labels from csv / shapefile.
-                labels_path = labels.pop()
+                labels_path = valid_label_paths.pop(0)
                 self.labels = self.load_labels(labels_path)
                 print(f"Loaded vector labels from {labels_path.name}.")
 
@@ -75,18 +81,21 @@ class DataTiler:
         xarray.DataArray: All bands stacked in a multidimensional array.
         """
         
-        filepaths = list(set(img_path for ext in ["*.tif", "*.tiff", "*.TIF", "*.TIFF"] for img_path in image_dir.rglob(ext)))
+        filepaths = [img_path for img_path in image_dir.rglob('*') if img_path.suffix.lower() in ['.tif', '.tiff']]
+        
         if not filepaths:
             raise IOError(f"The directory {image_dir} does not contain any GeoTIFF images.")
         
         images = [rxr.open_rasterio(img_path, default_name=img_path.stem) for img_path in filepaths]
         # Unifying crs across images
         target_crs = images[0].rio.crs
+        print("Files:", filepaths, len(filepaths))
+        print("Images:", len(images))
         return [img.rio.reproject(target_crs) for img in images]
             
 
 
-    def load_labels(self, labels_path):
+    def load_labels(self, labels_path, crop=True):
         """
         This loads building footprints from a vector file and stores them as an object attribute.
         TODO: Add support for other mask types beyond Open Buildings Dataset.
@@ -100,7 +109,12 @@ class DataTiler:
             buildings = gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
         elif labels_path.suffix.lower() == '.shp':
             buildings = gpd.read_file(labels_path)
-        return self.crop_labels(buildings)
+        
+        # Crop to adjust size to images
+        if crop:
+            return self.crop_labels(buildings)
+        return buildings
+
             
     
     def crop_labels(self, buildings):
