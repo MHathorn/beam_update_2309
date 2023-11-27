@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 
-import rasterio
 from rasterio.features import rasterize
 import rioxarray as rxr
 import xarray as xr

@@ -1,16 +1,9 @@
 from fastai.vision.all import *
-import numpy as np
-import random
-import os
-import pytz
-from datetime import datetime
 from semtorch import get_segmentation_learner
-from IPython.display import Audio, display
-from sklearn.model_selection import train_test_split
 
 from training.training_functions import seed, get_tile_size, check_fnames_lbls, batch_size, n_codes, get_y, \
     callbacks, timestamp
-import utils.my_paths as p
+from utils.my_paths import MODEL_DIR, CODES, SEED
 
 
 def hrnet_model_training(tile_type, backbone, fit_type, epochs, architecture='HRNet', split=.2,
@@ -36,14 +29,14 @@ def hrnet_model_training(tile_type, backbone, fit_type, epochs, architecture='HR
     p2c = n_codes(lbl_names)
 
         # Create function to load images and masks
-    dls = SegmentationDataLoaders.from_label_func(path, fnames, label_func=get_y, bs=bs, codes=p.CODES, seed=2022,
+    dls = SegmentationDataLoaders.from_label_func(path, fnames, label_func=get_y, bs=bs, codes=CODES, seed=SEED,
                                                     batch_tfms=tfms,
                                                     valid_pct=split)
 
     learn = get_segmentation_learner(dls, number_classes=2, segmentation_type="Semantic Segmentation",
                                      architecture_name="hrnet",
-                                     backbone_name=backbone, model_dir=p.MODEL_DIR, metrics=[Dice(), JaccardCoeff()],
+                                     backbone_name=backbone, model_dir=MODEL_DIR, metrics=[Dice(), JaccardCoeff()],
                                      splitter=trainable_params, pretrained=True).to_fp16()
 
-    learn.fit_one_cycle(epochs, cbs=callbacks(p.MODEL_DIR, architecture, backbone, fit_type, timestamp))
+    learn.fit_one_cycle(epochs, cbs=callbacks(MODEL_DIR, architecture, backbone, fit_type, timestamp))
     return learn, dls

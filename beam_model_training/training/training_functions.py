@@ -7,47 +7,43 @@ from semtorch import get_segmentation_learner
 from IPython.display import Audio, display
 from sklearn.model_selection import train_test_split
 from os.path import join
+import rioxarray as rxr
+import xarray as xr
 
-import utils.my_paths as p
+from utils.my_paths import ROOT_PATH, SEED, CODES
 
 
 
 # Set path of root folder of images and masks
-path = p.ROOT_PATH
-
-def n_codes(fnames, is_partial=True):
-    '''Gather the codes from a list of fnames'''
-    vals = set()
-    if is_partial:
-        random.shuffle(fnames)
-        fnames = fnames[:10]
-    for fname in fnames:
-        msk = np.array(PILMask.create(fname))
-        for val in np.unique(msk):
-            if val not in vals:
-                vals.add(val)
-    vals = list(vals)
-    p2c = dict()
-    for i, val in enumerate(vals):
-        p2c[i] = vals[i]
-    return p2c
+path = ROOT_PATH
 
 
-def get_msk(fn, p2c):
-    '''Grab a mask from a filename and adjust the pixels based on p2c'''
-    pix2class = n_codes(lbl_names)
-    # old structure: fn = f'{path}/buildings_mask_tiles/2019_10cm_RGB_BE_67/{tile_type}/{fn.stem[:-3]}lbl{fn.suffix}'
-    fn = str(fn).replace('image_tiles', 'mask_tiles')
-    msk = np.array(PILMask.create(fn))
-    mx = np.max(msk)
-    for i, val in enumerate(p2c):
-        msk[msk == p2c[i]] = val
-    return PILMask.create(msk)
+def map_unique_classes(file_names, is_partial=True):
+    '''Gather unique classes from a list of file names'''
+
+    # Sample 10 files if is_partial
+    file_names = random.sample(file_names, 10) if is_partial else file_names
+
+    # Get unique classes from file names
+    masks = [rxr.open_rasterio(file_path) for file_path in file_names]
+    unique_classes = np.unique([class_value for mask in masks for class_value in np.unique(mask)])
+
+    # Convert into a dictionary mapping index to class value
+    pixel_to_class = {i: class_value for i, class_value in enumerate(unique_classes)}
+    return pixel_to_class
 
 
-def get_y(o):
-    return get_msk(o, p2c)
-
+def get_mask(image_path, pixel_to_class):
+    '''Get mask from an image path and adjust the pixels based on p2c'''
+    # new structure: 
+    # - Train: fn = f'{path}/tiles/masks/{image_file.name}'
+    # - Test: fn = f'{path}/tiles/test_masks/{image_file.name}'
+    mask_path = image_path.parents[1] / image_path.parts[-1]
+    mAsk = rxr.open_rasterio(mask_path)
+    max_value = mask.max()
+    for i, val in enumerate(pixel_to_class):
+        mask = xr.where(mask == pixel_to_class[i], val, mask)
+    return mask
 
 def batch_size(backbone, tile_size):
   '''Automatically set batch size depending on image size and architecture used'''
@@ -89,8 +85,8 @@ def get_tile_size(tile_type):
 def check_fnames_lbls(tile_type):
     '''Get images and labels for dataloader and check whether their number is equal'''
     global fnames, lbl_names, path
-    fnames = get_image_files(join(p.ROOT_PATH, 'image_tiles'))
-    lbl_names = get_image_files(join(p.ROOT_PATH, 'mask_tiles'))
+    fnames = get_image_files(join(ROOT_PATH, 'image_tiles'))
+    lbl_names = get_image_files(join(ROOT_PATH, 'mask_tiles'))
     if len(fnames) != len(lbl_names):
         print('ERROR: unequal number of image and mask tiles!')
     return fnames, lbl_names, path
@@ -111,13 +107,12 @@ def check_dataset_balance(tile_type):
     # Check if there is a label for each image
     fnames, lbl_names, path = check_fnames_lbls(tile_type)
     # Get codes of masks
-    p2c = n_codes(lbl_names)
+    p2c_map = map_unique_classes(lbl_names)
 
-    label_func = get_y
 
 
     # Create dataloader to check building pixels
-    dls = SegmentationDataLoaders.from_label_func(path, fnames, label_func=label_func, bs=64, codes=p.CODES, seed=2)
+    dls = SegmentationDataLoaders.from_label_func(path, fnames, label_func=lambda x: get_mask(x, p2c_map), bs=64, codes=CODES, seed=SEED)
 
     targs = torch.zeros((0, 512, 512))
     # issue here with // execution
@@ -136,10 +131,9 @@ def check_dataset_balance(tile_type):
     return percentages
 
 
-def seed():
-    # Create Seed for Reproducibility
-    number_of_the_seed = 2022
-    random.seed(number_of_the_seed)
-    set_seed(number_of_the_seed)
+def seed(SEED):
+    """Seed randomization functions for reproducibility."""
+    random.seed(SEED)
+    set_seed(SEED)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False

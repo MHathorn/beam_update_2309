@@ -1,17 +1,22 @@
 from os.path import join
 
-from tiling.tiling_functions import create_if_not_exists
+from preprocess.tiling_functions import create_if_not_exists
 from training.training_functions import check_dataset_balance
 from hrnet_model import hrnet_model_training
 from u_net_model import u_net_model_training
-import torch
 import os
-import utils.my_paths as p
+from utils.my_paths import MODEL_DIR, ROOT_PATH
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 
-create_if_not_exists(p.MODEL_DIR)
+create_if_not_exists(MODEL_DIR)
+
+
+
+# Usage
+train_test_split_files(ROOT_PATH / "image_tiles", ROOT_PATH / "mask_tiles", ROOT_PATH / "test_image_tiles", ROOT_PATH / "test_mask_tiles", test_size=0.2)
+
 
 tile_type = '512_512 stride'
 

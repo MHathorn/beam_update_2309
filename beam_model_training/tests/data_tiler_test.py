@@ -1,6 +1,6 @@
 import shutil
 import pytest
-from tiling.data_tiler import DataTiler
+from preprocess.data_tiler import DataTiler
 import geopandas as gpd
 from pathlib import Path
 import rasterio
@@ -79,10 +79,7 @@ class Test_DataTiler:
             assert len(image_files) == len(mask_files), f"{name}: Number of images and mask tiles do not match."
 
             for image_file in image_files:
-                # Remove '_mask.tif' from the end of the corresponding mask file name
-                mask_file_name = f"{image_file.stem}_mask.tif"
-                mask_file = mask_dir / mask_file_name
-
+                mask_file = mask_dir / image_file.name
                 assert mask_file.exists()
 
                 with rasterio.open(image_file) as image, rasterio.open(mask_file) as mask:
