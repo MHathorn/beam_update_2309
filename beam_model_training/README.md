@@ -14,6 +14,26 @@ The expected folder structure is as follow (set the location of project_director
 
 Run the install.bat file as suggested by the documentation. After the installation has completed, the beam environment should have been created and made available to use.
 
+### PYTONPATH
+
+In order to run the scripts from the `beam_model_training`, this directory must be added to the PYTONPATH environment variable. Run the command in git bash:
+
+```bash
+export PYTHONPATH=$PYTHONPATH;/path/to/beam_model_training
+```
+
+or from the beam_model_training directory:
+
+```bash
+export PYTHONPATH=$PYTHONPATH;$PWD
+```
+
+Or in the command prompt:
+
+```shell
+set PYTHONPATH=%PYTHONPATH%;/path/to/beam_model_training
+```
+
 ## VS Code
 
 In order to use run VS Code within the Mamba environment, you can follow the instructions provided in the [Usage section](https://github.com/conda-forge/miniforge#usage) of miniforge.
