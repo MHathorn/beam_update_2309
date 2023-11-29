@@ -1,74 +1,36 @@
 from os.path import join
+from fastai.vision.all import get_image_files
 
-from preprocess.tiling_functions import create_if_not_exists
 from training.training_functions import check_dataset_balance
-from hrnet_model import hrnet_model_training
-from u_net_model import u_net_model_training
+from training.models import train
 import os
-from utils.my_paths import MODEL_DIR, ROOT_PATH
 
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["OMP_NUM_THREADS"] = "1"
-
-create_if_not_exists(MODEL_DIR)
+from utils.helpers import create_if_not_exists, seed, timestamp
+from utils.my_paths import ROOT_PATH, SEED
 
 
 
-# Usage
-train_test_split_files(ROOT_PATH / "image_tiles", ROOT_PATH / "mask_tiles", ROOT_PATH / "test_image_tiles", ROOT_PATH / "test_mask_tiles", test_size=0.2)
+def main():
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    os.environ["OMP_NUM_THREADS"] = "1"
+    seed(SEED)
+
+    model_dir = create_if_not_exists(ROOT_PATH / "models")
+    train_dir = ROOT_PATH / "tiles/train"
+
+    # percentages = check_dataset_balance(tile_type, augmented=False)
+
+    tile_type = '512_with_erosion'
+    backbone = 'resnet18'
+    fit_type = 'one_cycle'
+    epochs = 30
+    architecture = 'U-Net'
+    loss_function = None
+
+    learner = train(train_dir, model_dir, tile_type, backbone, fit_type, epochs, architecture='U-Net', split=.2, bs=4, loss_function=loss_function)
+    model_path = model_dir / f"{architecture}" / f"{backbone}_{timestamp()}_exported.pkl"
+    learner.export(model_path)
 
 
-tile_type = '512_512 stride'
-
-percentages = check_dataset_balance(tile_type, augmented=False)
-
-"""
-Train U-Net
-
-Unaugmented Training Data
-"""
-
-tile_type = '512_512 stride'
-backbone = 'resnet18'
-fit_type = 'One-Cycle'
-epochs = 200
-
-learn, dls = u_net_model_training(tile_type, backbone, fit_type, epochs, architecture='U-Net', augmented=False,
-                                  split=.2)
-
-"""Augmented Training Data"""
-
-# tile_type = '512_512 stride'
-# backbone = 'resnet18'
-# fit_type = 'One-Cycle'
-# epochs = 200
-
-# learn, dls = u_net_model_training(tile_type, backbone, fit_type, epochs, architecture='U-Net', augmented=True, split=.2)
-
-"""
-Train HRNet
-
-Unaugmented Training Data
-"""
-
-tile_type = '512_512 stride'
-backbone = 'hrnet_w18'
-fit_type = 'One-Cycle'
-epochs = 200
-
-learn, dls = hrnet_model_training(tile_type, backbone, fit_type, epochs, architecture='HRNet', augmented=False,
-                                  split=.2)
-
-"""Augmented Training Data"""
-
-# tile_type = '512_512 stride'
-# backbone = 'hrnet_w18'
-# fit_type = 'One-Cycle'
-# epochs = 200
-
-# learn, dls = hrnet_model_training(tile_type, backbone, fit_type, epochs, architecture='HRNet', augmented=True, split=.2)
-
-"""## Save models"""
-
-model_save_path = join(p.MODEL_DIR, 'f{timestamp}_model_exported.pkl')
-learn.export(model_save_path)
+if __name__ == '__main__':
+    main()

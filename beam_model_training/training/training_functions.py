@@ -18,11 +18,11 @@ from utils.my_paths import ROOT_PATH, SEED, CODES
 path = ROOT_PATH
 
 
-def map_unique_classes(file_names, is_partial=True):
-    '''Gather unique classes from a list of file names'''
+def map_unique_classes(file_names, is_partial=False):
+    """Gather unique classes from a list of file names"""
 
-    # Sample 10 files if is_partial
-    file_names = random.sample(file_names, 10) if is_partial else file_names
+    if is_partial and len(file_names) > 10:
+        file_names = random.sample(file_names, 10) 
 
     # Get unique classes from file names
     masks = [rxr.open_rasterio(file_path) for file_path in file_names]
@@ -34,19 +34,20 @@ def map_unique_classes(file_names, is_partial=True):
 
 
 def get_mask(image_path, pixel_to_class):
-    '''Get mask from an image path and adjust the pixels based on p2c'''
+    """Get mask from an image path and adjust the pixels based on p2c"""
     # new structure: 
-    # - Train: fn = f'{path}/tiles/masks/{image_file.name}'
-    # - Test: fn = f'{path}/tiles/test_masks/{image_file.name}'
-    mask_path = image_path.parents[1] / image_path.parts[-1]
-    mAsk = rxr.open_rasterio(mask_path)
-    max_value = mask.max()
+    mask_path = str(image_path).replace("images", "masks")
+    mask = rxr.open_rasterio(mask_path)
+    
     for i, val in enumerate(pixel_to_class):
         mask = xr.where(mask == pixel_to_class[i], val, mask)
-    return mask
+    mask = mask.values.reshape((mask.shape[1], mask.shape[2]))
+    
+    return PILMask.create(mask)
+
 
 def batch_size(backbone, tile_size):
-  '''Automatically set batch size depending on image size and architecture used'''
+  """Automatically set batch size depending on image size and architecture used"""
   if '512' in tile_size:
     batch_size_dict = {'resnet152': 2, 'resnet101': 2, 'resnet50': 2, 
                        # Change batch size for used backbone if you run into CUDA out of memory errors
@@ -59,22 +60,15 @@ def batch_size(backbone, tile_size):
   return batch_size_dict[backbone]
 
 
-def timestamp():
-    '''Timestamp for conducting experiments'''
-    tz = pytz.timezone('Europe/Berlin')
-    date = str(datetime.now(tz)).split(" ")
-    date_time = f"{date[0]}_{date[1].split('.')[0][:5]}"
-    return date_time
-
-
 def model_notification():
-    '''Create notification when model training is completed'''
+    """Create notification when model training is completed"""
     for i in range(5):
         display(Audio('https://www.soundjay.com/buttons/beep-03.wav', autoplay=True))
         time.sleep(2)
 
 
 def get_tile_size(tile_type):
+    """Extract tile size from type of tiles passed to the model."""
     if '512' in tile_type:
         tile_size = '512'
     elif '256' in tile_type:
@@ -82,39 +76,27 @@ def get_tile_size(tile_type):
     return tile_size
 
 
-def check_fnames_lbls(tile_type):
-    '''Get images and labels for dataloader and check whether their number is equal'''
-    global fnames, lbl_names, path
-    fnames = get_image_files(join(ROOT_PATH, 'image_tiles'))
-    lbl_names = get_image_files(join(ROOT_PATH, 'mask_tiles'))
-    if len(fnames) != len(lbl_names):
-        print('ERROR: unequal number of image and mask tiles!')
-    return fnames, lbl_names, path
-
-
 def callbacks(model_dir, architecture, backbone, fit_type, timestamp):
-    '''Log results in CSV, show progress in graph'''
+    """Log results in CSV, show progress in graph"""
     cbs = [CSVLogger(fname=f'{model_dir}/{architecture}_{backbone}_{fit_type}_{timestamp()}.csv', append=True),
            ShowGraphCallback()]
     return cbs
 
 
-def check_dataset_balance(tile_type):
-    '''Check, how balanced the dataset is'''
-    global tile_size, p2c
-    tile_size = get_tile_size(tile_type)
+def check_dataset_balance(tile_type, images_dir, masks_dir):
+    """Check balance of the dataset."""
+  
+    tile_size = get_tile_size(tile_type) 
+    fnames = get_image_files(images_dir) 
+    lbl_names = get_image_files(masks_dir)
 
-    # Check if there is a label for each image
-    fnames, lbl_names, path = check_fnames_lbls(tile_type)
     # Get codes of masks
     p2c_map = map_unique_classes(lbl_names)
 
-
-
     # Create dataloader to check building pixels
-    dls = SegmentationDataLoaders.from_label_func(path, fnames, label_func=lambda x: get_mask(x, p2c_map), bs=64, codes=CODES, seed=SEED)
+    dls = SegmentationDataLoaders.from_label_func(ROOT_PATH, fnames, label_func=lambda x: get_mask(x, p2c_map), bs=2, codes=CODES, seed=SEED)
 
-    targs = torch.zeros((0, 512, 512))
+    targs = torch.zeros((0, tile_size, tile_size))
     # issue here with // execution
     for _, masks in dls[0]:
         targs = torch.cat((targs, masks.cpu()), dim=0)
@@ -129,11 +111,3 @@ def check_dataset_balance(tile_type):
     plt.show()
     print(f'Mean Percentage of Pixels Belonging to Buildings: {round(percentages.mean().item(), 3)}')
     return percentages
-
-
-def seed(SEED):
-    """Seed randomization functions for reproducibility."""
-    random.seed(SEED)
-    set_seed(SEED)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False

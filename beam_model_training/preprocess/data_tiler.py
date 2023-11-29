@@ -13,6 +13,8 @@ from shapely.geometry import box, Polygon
 from shapely.ops import unary_union
 from cv2 import erode
 
+from utils.helpers import create_if_not_exists
+
 class DataTiler:
     """Data Tiler class. This class takes in an image, tile size, and tile directory, and populates
     the tile directory with image tiles ready for data augmentation and train-test split. 
@@ -43,9 +45,9 @@ class DataTiler:
             # Preparing tiles directory
             self.output_dir = self.input_path / "tiles"
             if not self.output_dir.exists():
-                self.create_subdir(self.output_dir)
+                create_if_not_exists(self.output_dir, overwrite=True)
             self.dir_structure = {
-                'image_tiles': self.create_subdir(self.output_dir / 'images'),
+                'image_tiles': create_if_not_exists(self.output_dir / 'images', overwrite=True),
             }
             
             # Checking for masks and loading if exist
@@ -63,7 +65,7 @@ class DataTiler:
                 raise IOError("More than one labels file detected. Please provide a single labels file.")
             
             else:
-                self.dir_structure['mask_tiles'] = self.create_subdir(self.output_dir / 'masks')
+                self.dir_structure['mask_tiles'] = create_if_not_exists(self.output_dir / 'masks', overwrite=True)
                 # Loading labels from csv / shapefile.
                 labels_path = valid_label_paths.pop(0)
                 self.labels = self.load_labels(labels_path)
@@ -88,8 +90,7 @@ class DataTiler:
         images = [rxr.open_rasterio(img_path, default_name=img_path.stem) for img_path in filepaths]
         # Unifying crs across images
         target_crs = images[0].rio.crs
-        print("Files:", filepaths, len(filepaths))
-        print("Images:", len(images))
+        print("Found images:", len(images))
         return [img.rio.reproject(target_crs) for img in images]
             
 
@@ -210,7 +211,7 @@ class DataTiler:
 
         if write:
         
-            self.dir_structure['tmp'] = self.create_subdir(self.input_path / "tmp")
+            self.dir_structure['tmp'] = create_if_not_exists(self.input_path / "tmp", overwrite=True)
             mask_path = self.dir_structure['tmp'] / f"{image.name}_mask.tif"
             mask_da.rio.to_raster(mask_path)
             print(f"Saved mask for {image.name}.")
@@ -252,7 +253,7 @@ class DataTiler:
 
                     if self.labels is not None:
                         msk_tile = mask.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
-                        msk_path = self.dir_structure['mask_tiles'] / f'{image.name}_r{i}_c{j}_MASK.TIF'
+                        msk_path = self.dir_structure['mask_tiles'] / f'{image.name}_r{i}_c{j}.TIF'
                         msk_tile.rio.to_raster(msk_path)
             
             print(f"Tiled {image.name} into {total_tiles} tiles in folder `tiles/images`.")
