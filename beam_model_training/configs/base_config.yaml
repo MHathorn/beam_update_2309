@@ -1,0 +1,25 @@
+---
+# Template configuration for experiments.
+# Update for general changes, or make a copy for experiments.
+# GENERAL SETTINGS
+codes: ["Background", "Building"]
+dirs: # Expected directory structure.
+  image_tiles: tiles/images
+  images: images
+  labels: labels
+  mask_tiles: tiles/masks
+  models: models
+  tiles: tiles
+  train: tiles/train
+seed: 2022
+root_dir: C:/Users/adm.nkiner/Documents/BEAM/training
+# EXPERIMENT SETTINGS
+batch_size: 4
+erosion: true
+labels_type: open_buildings_dataset
+test_size: 0.2
+tile_size: 512
+training: true
+epochs: 30
+architecture: U-Net
+fit_type: one_cycle

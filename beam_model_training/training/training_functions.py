@@ -1,18 +1,16 @@
-from fastai.vision.all import *
-import numpy as np
 import random
-import pytz
 from datetime import datetime
-from semtorch import get_segmentation_learner
-from IPython.display import Audio, display
-from sklearn.model_selection import train_test_split
 from os.path import join
+
+import numpy as np
+import pytz
 import rioxarray as rxr
 import xarray as xr
-
-from utils.my_paths import ROOT_PATH, SEED, CODES
-
-
+from fastai.vision.all import *
+from IPython.display import Audio, display
+from semtorch import get_segmentation_learner
+from sklearn.model_selection import train_test_split
+from utils.my_paths import CODES, ROOT_PATH, SEED
 
 # Set path of root folder of images and masks
 path = ROOT_PATH
