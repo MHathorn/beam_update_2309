@@ -13,13 +13,17 @@ dirs: # Expected directory structure.
   train: tiles/train
 seed: 2022
 root_dir: C:/Users/adm.nkiner/Documents/BEAM/training
-# EXPERIMENT SETTINGS
-batch_size: 4
+# DATA SETTINGS
 erosion: true
 labels_type: open_buildings_dataset
 test_size: 0.2
 tile_size: 512
 training: true
-epochs: 30
-architecture: U-Net
-fit_type: one_cycle
+# MODEL SETTINGS
+learn:
+  bs: 4
+  epochs: 30
+  architecture: U-Net
+  fit_type: one_cycle
+  backbone: resnet18
+  loss_function: None

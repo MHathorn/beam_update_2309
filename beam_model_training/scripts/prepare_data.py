@@ -10,7 +10,7 @@ def main():
     seed(config["seed"])
     root_dir = Path(config["root_dir"])
     
-    img_tiler = DataTiler(path)
+    img_tiler = DataTiler(root_dir)
     img_tiler.generate_tiles(config["tile_size"])
 
     if config["training"]:

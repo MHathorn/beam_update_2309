@@ -45,7 +45,7 @@ def get_rgb_channels(tiff_file_path):
     return rgb_image
 
 
-def gen_train_test(tiles_dir, test_size=0.2):
+def gen_train_test(tiles_dir, test_size=0.2, seed=2022):
     """
     Splits image and mask files into training and testing sets and moves the testing files to specified directories.
         
@@ -78,8 +78,8 @@ def gen_train_test(tiles_dir, test_size=0.2):
     # Get all file names from the image directory
     image_files = [f for f in images_dir.iterdir() if f.is_file()]
 
-    # Split the files into training and testing sets
-    train_files, test_files = train_test_split(image_files, test_size=test_size, random_state=SEED)
+    # Split the files into training and testing 
+    train_files, test_files = train_test_split(image_files, test_size=test_size, random_state=seed)
 
     for dir_name, files in [("test", test_files), ("train", train_files)]:
         target_images_dir = create_if_not_exists(tiles_dir / dir_name / "images", overwrite=True)

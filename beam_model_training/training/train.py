@@ -2,12 +2,11 @@ from fastai.vision.all import *
 from semtorch import get_segmentation_learner
 from utils.helpers import timestamp
 
-from training.training_functions import get_tile_size, map_unique_classes, batch_size, map_unique_classes, get_mask, \
+from training.training_functions import map_unique_classes, batch_size, map_unique_classes, get_mask, \
     callbacks
-from utils.my_paths import CODES, SEED
 from training.losses import DualFocalLoss, CombinedLoss
 
-def train(train_dir, model_dir, tile_type, backbone, fit_type, epochs, architecture='HRNet', split=.2, bs=None, loss_function=None):
+def train(train_dir, model_dir, tile_size, backbone, fit_type, epochs, architecture='HRNet', split=.2, bs=None, loss_function=None):
     """
     This function trains a model based on the given parameters. It supports both HRNet and U-Net architectures.
     It applies image augmentations, creates dataloaders, sets up the model, and finally trains it.
@@ -29,7 +28,6 @@ def train(train_dir, model_dir, tile_type, backbone, fit_type, epochs, architect
     dls: Dataloaders used for training.
     """
 
-    tile_size = get_tile_size(tile_type)
 
     tfms = [*aug_transforms(mult=1.0, do_flip=True, flip_vert=True, max_rotate=40.0, min_zoom=1.0, max_zoom=1.4, max_warp=0.4),
             Normalize.from_stats(*imagenet_stats),
@@ -47,7 +45,7 @@ def train(train_dir, model_dir, tile_type, backbone, fit_type, epochs, architect
     if bs == None:
         bs = batch_size(backbone, tile_size)
 
-    dls = SegmentationDataLoaders.from_label_func(train_dir / "images", image_files, label_func=lambda x: get_mask(x, p2c_map), bs=bs, codes=CODES, seed=SEED,
+    dls = SegmentationDataLoaders.from_label_func(train_dir / "images", image_files, label_func=lambda x: get_mask(x, p2c_map), bs=bs, codes=["Background", "Building"], seed=2022,
                                                   batch_tfms=tfms,
                                                   valid_pct=split)
 

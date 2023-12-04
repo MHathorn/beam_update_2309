@@ -10,10 +10,8 @@ from fastai.vision.all import *
 from IPython.display import Audio, display
 from semtorch import get_segmentation_learner
 from sklearn.model_selection import train_test_split
-from utils.my_paths import CODES, ROOT_PATH, SEED
 
 # Set path of root folder of images and masks
-path = ROOT_PATH
 
 
 def map_unique_classes(file_names, is_partial=False):
@@ -46,13 +44,13 @@ def get_mask(image_path, pixel_to_class):
 
 def batch_size(backbone, tile_size):
   """Automatically set batch size depending on image size and architecture used"""
-  if '512' in tile_size:
+  if tile_size == 512:
     batch_size_dict = {'resnet152': 2, 'resnet101': 2, 'resnet50': 2, 
                        # Change batch size for used backbone if you run into CUDA out of memory errors
                        'resnet34': 11, 'resnet18': 8, 'vgg16_bn': 2,
                        'hrnet_w18': 32, 'hrnet_w30': 32, 'hrnet_w32': 32,
                        'hrnet_w48': 18}
-  elif '256' in tile_size:
+  elif tile_size == 256:
     batch_size_dict = {'resnet152': 2, 'resnet101': 2, 'resnet50': 2,
                        'resnet34': 11, 'resnet18': 10, 'hrnet_w18': 64}
   return batch_size_dict[backbone]
@@ -81,10 +79,9 @@ def callbacks(model_dir, architecture, backbone, fit_type, timestamp):
     return cbs
 
 
-def check_dataset_balance(tile_type, images_dir, masks_dir):
+def check_dataset_balance(images_dir, masks_dir, tile_size, codes, seed):
     """Check balance of the dataset."""
   
-    tile_size = get_tile_size(tile_type) 
     fnames = get_image_files(images_dir) 
     lbl_names = get_image_files(masks_dir)
 
@@ -92,7 +89,7 @@ def check_dataset_balance(tile_type, images_dir, masks_dir):
     p2c_map = map_unique_classes(lbl_names)
 
     # Create dataloader to check building pixels
-    dls = SegmentationDataLoaders.from_label_func(ROOT_PATH, fnames, label_func=lambda x: get_mask(x, p2c_map), bs=2, codes=CODES, seed=SEED)
+    dls = SegmentationDataLoaders.from_label_func(images_dir, fnames, label_func=lambda x: get_mask(x, p2c_map), bs=2, codes=codes, seed=seed)
 
     targs = torch.zeros((0, tile_size, tile_size))
     # issue here with // execution
