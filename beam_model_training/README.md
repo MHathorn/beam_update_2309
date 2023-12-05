@@ -34,6 +34,26 @@ Or in the command prompt:
 set PYTHONPATH=%PYTHONPATH%;/path/to/beam_model_training
 ```
 
+To fix this permanently for your user, you will need to follow these steps:
+
+1. Identiy the site packages directory with command:
+
+```bash
+python -m site --user-site
+```
+
+2. Create directory if it doesn't exist, from git bash:
+
+```bash
+USER_SITE_PATH=$(python -m site --user-site)
+mkdir $USER_SITE_PATH
+```
+
+3. Create file `pythonpath.pth` in this directory.
+4. Add the path to the `beam_model_training` directory into this file.
+
+TODO: Update the `install.bat` script to create the pythonpath.pth file on initial setup.
+
 ## VS Code
 
 In order to use run VS Code within the Mamba environment, you can follow the instructions provided in the [Usage section](https://github.com/conda-forge/miniforge#usage) of miniforge.
