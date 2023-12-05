@@ -2,7 +2,7 @@ from fastai.vision.all import *
 from semtorch import get_segmentation_learner
 from utils.helpers import timestamp
 
-from training.training_functions import map_unique_classes, batch_size, map_unique_classes, get_mask, \
+from training.training_functions import map_unique_classes, batch_size, map_unique_classes, MaskGetter, \
     callbacks
 from training.losses import DualFocalLoss, CombinedLoss
 
@@ -45,9 +45,12 @@ def train(train_dir, model_dir, tile_size, backbone, fit_type, epochs, architect
     if bs == None:
         bs = batch_size(backbone, tile_size)
 
-    dls = SegmentationDataLoaders.from_label_func(train_dir / "images", image_files, label_func=lambda x: get_mask(x, p2c_map), bs=bs, codes=["Background", "Building"], seed=2022,
+    mask_getter = MaskGetter(p2c_map)
+    label_func = partial(mask_getter.get_y)
+
+    dls = SegmentationDataLoaders.from_label_func(train_dir / "images", image_files, label_func=label_func, bs=bs, codes=["Background", "Building"], seed=2022,
                                                   batch_tfms=tfms,
-                                                  valid_pct=split)
+                                                  valid_pct=split, num_workers=0)
 
     if architecture.lower() == 'hrnet':
         learner = get_segmentation_learner(dls, number_classes=2, segmentation_type="Semantic Segmentation",

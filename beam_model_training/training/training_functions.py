@@ -14,6 +14,14 @@ from sklearn.model_selection import train_test_split
 # Set path of root folder of images and masks
 
 
+class MaskGetter:
+    def __init__(self, p2c_map):
+        self.p2c_map = p2c_map
+
+    def get_y(self, x):
+        return get_mask(x, self.p2c_map)
+
+
 def map_unique_classes(file_names, is_partial=False):
     """Gather unique classes from a list of file names"""
 
@@ -88,8 +96,12 @@ def check_dataset_balance(images_dir, masks_dir, tile_size, codes, seed):
     # Get codes of masks
     p2c_map = map_unique_classes(lbl_names)
 
+    mask_getter = MaskGetter(p2c_map)
+    label_func = partial(mask_getter.get_y)
+
+
     # Create dataloader to check building pixels
-    dls = SegmentationDataLoaders.from_label_func(images_dir, fnames, label_func=lambda x: get_mask(x, p2c_map), bs=2, codes=codes, seed=seed)
+    dls = SegmentationDataLoaders.from_label_func(images_dir, fnames, label_func=label_func, bs=2, codes=codes, seed=seed)
 
     targs = torch.zeros((0, tile_size, tile_size))
     # issue here with // execution
