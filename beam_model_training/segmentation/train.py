@@ -5,7 +5,7 @@ import rioxarray as rxr
 import xarray as xr
 from fastai.vision.all import *
 from semtorch import get_segmentation_learner
-from training.losses import CombinedLoss, DualFocalLoss
+from segmentation.losses import CombinedLoss, DualFocalLoss
 from utils.helpers import create_if_not_exists, load_config, seed, timestamp
 
 # Set path of root folder of images and masks
@@ -193,7 +193,7 @@ class Trainer:
 
         Returns:
             Learner: Trained model.
-            Dataloaders: Dataloaders used for training.
+            Dataloaders: Dataloaders used for segmentation.
         """
 
 

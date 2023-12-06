@@ -10,7 +10,7 @@ import torch
 from fastai.vision.all import get_image_files, load_learner
 from natsort import os_sorted
 from shapely.geometry import Polygon
-from training.train import Trainer
+from segmentation.train import Trainer
 from utils.helpers import create_if_not_exists, load_config
 
 

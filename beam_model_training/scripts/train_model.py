@@ -1,7 +1,7 @@
 
 import os
 
-from training.train import Trainer
+from segmentation.train import Trainer
 from utils.helpers import load_config
 
 
