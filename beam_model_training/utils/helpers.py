@@ -42,8 +42,8 @@ def load_config(config_name):
 def timestamp():
     """Timestamp for conducting experiments"""
     tz = pytz.timezone('Europe/Berlin')
-    date = str(datetime.now(tz)).split(" ")
-    date_time = f"{date[0]}_{date[1].split('.')[0][:5]}"
+    now = datetime.now(tz)
+    date_time = now.strftime("%Y%m%d-%H%M")
     return date_time
 
 def create_if_not_exists(dir, overwrite=False):
