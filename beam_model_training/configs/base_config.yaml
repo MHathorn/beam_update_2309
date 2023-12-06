@@ -11,6 +11,9 @@ dirs: # Expected directory structure.
   models: models
   tiles: tiles
   train: tiles/train
+  test: tiles/test
+  predictions: predict/masks
+  shapefiles: predict/shapefiles
 seed: 2022
 root_dir: C:/Users/adm.nkiner/Documents/BEAM/training
 # DATA SETTINGS
@@ -20,10 +23,12 @@ test_size: 0.2
 tile_size: 512
 training: true
 # MODEL SETTINGS
-learn:
+train:
   bs: 4
-  epochs: 30
+  epochs: 5
   architecture: U-Net
   fit_type: one_cycle
   backbone: resnet18
   loss_function: None
+infer:
+  model_name: model_20231206-1639.pkl # Must be located in models directory.

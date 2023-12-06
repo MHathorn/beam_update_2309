@@ -2,9 +2,7 @@ import shutil
 from fastai.vision.all import get_image_files
 
 from sklearn.model_selection import train_test_split
-from utils.my_paths import SEED
 from utils.helpers import create_if_not_exists
-
 
 import rioxarray
 
@@ -71,12 +69,15 @@ def gen_train_test(tiles_dir, test_size=0.2, seed=2022):
     # Ensure the source directories exist and no files are missing.
     if not images_dir.exists() or not masks_dir.exists():
         raise IOError("Source directories do not exist.")
-    elif len(get_image_files(images_dir)) != len(get_image_files(masks_dir)):
-        raise IOError(f"Mismatch in image and mask count (Images: {len()})")
-
-
+    
     # Get all file names from the image directory
-    image_files = [f for f in images_dir.iterdir() if f.is_file()]
+    image_files = list(images_dir.glob('*'))
+
+    if len(image_files) != len(list(masks_dir.glob('*'))):
+        raise ValueError(f"Mismatch in image and mask count (Images: {len()})")
+
+
+    
 
     # Split the files into training and testing 
     train_files, test_files = train_test_split(image_files, test_size=test_size, random_state=seed)
