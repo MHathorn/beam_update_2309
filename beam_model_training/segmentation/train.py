@@ -4,6 +4,7 @@ import numpy as np
 import rioxarray as rxr
 import xarray as xr
 from fastai.vision.all import *
+from fastai.callback.tensorboard import TensorBoardCallback
 from semtorch import get_segmentation_learner
 from segmentation.losses import CombinedLoss, DualFocalLoss
 from utils.helpers import create_if_not_exists, load_config, seed, timestamp
@@ -75,7 +76,7 @@ class Trainer:
         unique_classes = set()
         for file_path in mask_files:
             mask = rxr.open_rasterio(file_path)
-            unique_classes.update(np.unique(mask))
+            unique_classes.update(np.unique(mask.data))
 
         # Convert into a dictionary mapping index to class value
         pixel_to_class = {i: class_value for i, class_value in enumerate(unique_classes)}
@@ -134,9 +135,12 @@ class Trainer:
         Returns:
             list: List of callbacks.
         """
-        log_path = str(self.model_dir / f'train_metrics_{self.architecture}_{self.backbone}_{timestamp}.csv')
-        cbs = [CSVLogger(fname=log_path, append=True),
-            ShowGraphCallback()]
+        log_dir = create_if_not_exists(self.model_dir / f'{self.architecture}_{timestamp}_logs')
+        csv_path = str(log_dir / 'train_metrics.csv')
+        tb_dir = str(log_dir / 'tb_logs/')
+        cbs = [CSVLogger(fname=csv_path, append=True),
+            ShowGraphCallback(),
+            TensorBoardCallback(log_dir=tb_dir)]
         return cbs
 
 
@@ -216,13 +220,13 @@ class Trainer:
             self.learner = get_segmentation_learner(dls, number_classes=2, segmentation_type="Semantic Segmentation",
                                             architecture_name="hrnet",
                                             backbone_name=self.backbone, model_dir=self.model_dir, metrics=[Dice(), JaccardCoeff()],
-                                            splitter=trainable_params, pretrained=True).to_fp16()
+                                            splitter=trainable_params, pretrained=True)
         elif self.architecture.lower() == 'u-net':
             loss_functions = {'Dual_Focal_loss': DualFocalLoss(), 'CombinedLoss': CombinedLoss(),
                             'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None}
             backbones = {'resnet18': resnet18, 'resnet34': resnet34, 'resnet50': resnet50,
                         'resnet101': resnet101, 'vgg16_bn': vgg16_bn}
-            self.learner = unet_learner(dls, backbones.get(self.backbone), n_out=2, loss_func=loss_functions.get(self.loss_function), metrics=[Dice(), JaccardCoeff()]).to_fp16()
+            self.learner = unet_learner(dls, backbones.get(self.backbone), n_out=2, loss_func=loss_functions.get(self.loss_function), metrics=[Dice(), JaccardCoeff()])
 
         save_timestamp = timestamp()
         self.learner.fit_one_cycle(self.epochs, cbs=self._callbacks(save_timestamp))
@@ -233,7 +237,7 @@ class Trainer:
 
     def _save(self, timestamp):
         
-        model_path = str(self.model_dir / f"model_{timestamp}.pkl")
+        model_path = str(self.model_dir / f"{self.architecture}_{timestamp}.pkl")
         self.learner.export(model_path)
 
 

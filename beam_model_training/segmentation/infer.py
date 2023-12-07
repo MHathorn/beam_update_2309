@@ -53,10 +53,9 @@ class MapGenerator:
             self.shp_dir = create_if_not_exists(path / config["dirs"]["shapefiles"], overwrite=True)
             self.predict_dir = create_if_not_exists(path / config["dirs"]["predictions"], overwrite=True)
 
-            infer_args = config["infer"]
+            infer_args = config["test"]
             model_path = path / config["dirs"]["models"] / infer_args["model_name"]
             if not model_path.exists():
-            
                 raise ValueError(f"Couldn't find model under {model_path}.")
             self.model = load_learner(model_path)
         except KeyError as e:
@@ -149,17 +148,19 @@ class MapGenerator:
             return arr.reshape(h // nrows, -1, nrows, ncols).swapaxes(1, 2).reshape(h, w) # reshape the array
 
 
-    def create_tile_inferences(self):
+    def create_tile_inferences(self, images_dir=None):
         """
         Performs inference on each tile in the images directory and saves the results.
         """
-        for image_file in self.images_dir.iterdir():
+        images_dir = self.images_dir if images_dir is None else Path(images_dir)
+
+        for image_file in images_dir.iterdir():
             if image_file.is_file() and image_file.suffix.lower() in ['.tif', '.tiff']:
 
                 # Run inference and save as grayscale image
                 pred, _, _ = self.model.predict(image_file) 
                 output = torch.exp(pred[:, :]).detach().cpu().numpy() 
-                inference_path = self.predict_dir / (image_file.stem + '_inference.tif')
+                inference_path = self.predict_dir / (image_file.stem +'_inference.tif')
                 with rasterio.open(image_file) as src:
                     profile = src.profile
                     
@@ -174,3 +175,4 @@ if __name__ == "__main__":
     config = load_config("base_config.yaml")
     map_gen = MapGenerator(config)
     map_gen.create_tile_inferences()
+

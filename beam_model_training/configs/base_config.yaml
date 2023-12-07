@@ -3,32 +3,32 @@
 # Update for general changes, or make a copy for experiments.
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
-dirs: # Expected directory structure.
+dirs:
+  eval: eval
   image_tiles: tiles/images
   images: images
   labels: labels
   mask_tiles: tiles/masks
   models: models
-  tiles: tiles
-  train: tiles/train
-  test: tiles/test
   predictions: predict/masks
   shapefiles: predict/shapefiles
-seed: 2022
-root_dir: C:/Users/adm.nkiner/Documents/BEAM/training
+  test: tiles/test
+  tiles: tiles
+  train: tiles/train
 # DATA SETTINGS
 erosion: true
 labels_type: open_buildings_dataset
+root_dir: C:/Users/adm.nkiner/Documents/BEAM/training
+seed: 2022
+test:
+  model_name: U-Net_20231207-1239.pkl
 test_size: 0.2
 tile_size: 512
-training: true
 # MODEL SETTINGS
 train:
-  bs: 4
-  epochs: 5
   architecture: U-Net
-  fit_type: one_cycle
   backbone: resnet18
+  epochs: 300
+  fit_type: one_cycle
   loss_function: None
-infer:
-  model_name: model_20231206-1639.pkl # Must be located in models directory.
+training: true
