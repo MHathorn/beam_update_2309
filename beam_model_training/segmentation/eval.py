@@ -1,5 +1,6 @@
 
 import os
+from datetime import datetime
 from itertools import islice
 from pathlib import Path
 
@@ -8,15 +9,39 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import rasterio
+from fastai.vision.all import load_learner
 from PIL import Image, ImageDraw
 from segmentation.infer import MapGenerator
-from utils.helpers import create_if_not_exists, load_config
 from segmentation.train import Trainer
-from fastai.vision.all import load_learner
+from utils.helpers import (create_if_not_exists, crs_to_pixel_coords,
+                           load_config)
 
 
 class Evaluator:
+    """
+    A class used to evaluate the performance of a segmentation model.
+
+    ...
+
+    Methods
+    -------
+    overlay_shapefiles_on_images(n_images, show=False):
+        Overlays shapefiles on corresponding images and saves or displays the result.
+    compute_metrics():
+        Computes precision, recall, accuracy, dice coefficient, and IoU for the model's predictions.
+    evaluate(n_images=10):
+        Generates predictions, overlays them on images, computes metrics, and saves the results.
+    """
+
     def __init__(self, config):
+        """
+        Constructs all the necessary attributes for the Evaluator object.
+
+        Parameters
+        ----------
+            config : dict
+                Configuration parameters.
+        """
 
         try:
             path = Path(config["root_dir"])
@@ -31,7 +56,8 @@ class Evaluator:
             self.generate_preds = True
 
             infer_args = config["test"]
-            model_path = path / config["dirs"]["models"] / infer_args["model_name"]
+            self.model_name = infer_args["model_name"]
+            model_path = path / config["dirs"]["models"] / self.model_name
             if not model_path.exists():
                 raise ValueError(f"Couldn't find model under {model_path}.")
             self.model = load_learner(model_path)
@@ -39,10 +65,21 @@ class Evaluator:
             raise KeyError(f"Config must have a value for {e}.")
 
     def overlay_shapefiles_on_images(self, n_images, show=False):
-        for shapefile in islice(self.shp_dir.iterdir(), n_images):
+        """
+        Overlays shapefiles on corresponding images and saves or displays the result.
+
+        Parameters
+        ----------
+            n_images : int
+                Number of images to process.
+            show : bool, optional
+                Whether to display the images or save them to disk (default: False).
+        """
+        shapefiles = [f for f in self.shp_dir.iterdir() if f.name.endswith('.shp')]
+        for shapefile in islice(shapefiles, n_images):
             if shapefile.name.endswith('.shp'):
                 # Construct the corresponding image file path
-                image_file = shapefile.name.replace('_predicted.shp', '.tif') # Assuming the image extension is .jpg
+                image_file = shapefile.name.replace('_predicted.shp', '.tif') 
                 image_path = self.images_dir / image_file
 
                 if image_path.exists():
@@ -50,15 +87,16 @@ class Evaluator:
                     gdf = gpd.read_file(shapefile)
 
                     # Open the image
-                    with Image.open(image_path) as img:
+                    with rasterio.open(image_path) as ds:
+                        transform = ds.transform
+
+                        img = Image.fromarray(ds.read().transpose((1,2,0)))
                         draw = ImageDraw.Draw(img)
 
-                        # Overlay each geometry in the shapefile
                         for geometry in gdf.geometry:
+                            # Convert the polygon coordinates to image pixel coordinates and overlay to img
                             if geometry.geom_type == 'Polygon':
-                                # Convert the polygon coordinates to image pixel coordinates
-                                # This step needs customization based on the coordinate system of your shapefiles and images
-                                polygon = [(x, y) for x, y in zip(geometry.exterior.coords.xy[0], geometry.exterior.coords.xy[1])]
+                                polygon = [crs_to_pixel_coords(x, y, transform) for x, y in zip(geometry.exterior.coords.xy[0], geometry.exterior.coords.xy[1])]
                                 draw.polygon(polygon, outline="red")
 
                         # Display the image
@@ -76,6 +114,14 @@ class Evaluator:
 
 
     def compute_metrics(self):
+        """
+        Computes precision, recall, accuracy, dice coefficient, and IoU for the model's predictions.
+
+        Returns
+        -------
+            pd.DataFrame
+                A dataframe containing the computed metrics.
+        """
         sum_intersect = 0
         sum_total_pred = 0
         sum_total_truth = 0
@@ -84,12 +130,13 @@ class Evaluator:
 
         num_files = 0
 
-        for groundtruth_path in self.masks_dir.iterdir():
+        gt_images = [f for f in self.masks_dir.iterdir() if f.suffix.lower in ['.tif', '.tiff']]
+        for groundtruth_path in gt_images:
             pred_mask_path = self.predict_dir / (groundtruth_path.stem +'_inference.tif')
 
             if pred_mask_path.exists():
+                
                 # Load ground truth mask
-
                 gt_mask = np.array(Image.open(groundtruth_path).convert('L')) / 255  # Convert to binary (0 and 1)
                 gt_mask = gt_mask.astype(int)
 
@@ -121,6 +168,7 @@ class Evaluator:
 
             # Create a DataFrame with the aggregated metrics
             metrics = {
+                "EvalTimestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "Precision": [round(precision, 3)],
                 "Recall": [round(recall, 3)],
                 "Accuracy": [round(accuracy, 3)],
@@ -132,13 +180,27 @@ class Evaluator:
             return pd.DataFrame()
 
     def evaluate(self, n_images=10):
+        """
+        Generates predictions, overlays them on images, computes metrics, and saves the results.
+
+        Parameters
+        ----------
+            n_images : int, optional
+                Number of overlays to generate (default: 10).
+
+        """
         if self.generate_preds:
             map_gen = MapGenerator(self.config)
             map_gen.create_tile_inferences()
         self.overlay_shapefiles_on_images(n_images)
         metrics = self.compute_metrics()
-        output_file_path = self.output_dir / 'metrics.csv'
-        metrics.to_csv(output_file_path)
+        output_file_path = self.output_dir / self.model_name.replace('.csv', 'metrics.csv')
+        if output_file_path.exists():
+            df = pd.read_csv(output_file_path)
+            df = df.append(metrics, ignore_index=True)
+        else:
+            df = metrics
+        df.to_csv(output_file_path, index=False)
 
 if __name__ == "__main__":
     config = load_config("base_config.yaml")

@@ -66,3 +66,19 @@ def create_if_not_exists(dir, overwrite=False):
             shutil.rmtree(dir_path)  # Delete the directory and its contents
             dir_path.mkdir(parents=True)
         return dir_path
+
+
+def crs_to_pixel_coords(x, y, transform):
+    """
+    Convert CRS coordinates to pixel coordinates.
+    
+    Parameters:
+    x, y: Coordinates in CRS.
+    transform: A rasterio.Affine object that defines a coordinate transformation.
+               This should be the .transform attribute of your rasterio/xarray dataset.
+               
+    Returns:
+    px, py: Coordinates in pixel space.
+    """
+    px, py = ~transform * (x, y)
+    return int(px), int(py)
