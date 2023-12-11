@@ -1,19 +1,20 @@
-from pathlib import Path
+import gzip
 import shutil
+from pathlib import Path
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
-import geopandas as gpd
-
-from rasterio.features import rasterize
 import rioxarray as rxr
 import xarray as xr
-from shapely import wkt
-from shapely.geometry import box, Polygon
-from shapely.ops import unary_union
 from cv2 import erode
+from rasterio.features import rasterize
+from shapely import wkt
+from shapely.geometry import Polygon, box
+from shapely.ops import unary_union
 
 from utils.helpers import create_if_not_exists
+
 
 class DataTiler:
     """Data Tiler class. This class takes in an image, tile size, and tile directory, and populates
@@ -52,7 +53,7 @@ class DataTiler:
             
             # Checking for masks and loading if exist
             label_paths = list((self.input_path / "labels").iterdir())
-            valid_label_paths = [l for l in label_paths if l.suffix in ['.csv', '.shp']]
+            valid_label_paths = [l for l in label_paths if l.suffix in ['.csv', '.shp'] or l.name.endswith('.csv.gz')]
             if not valid_label_paths:
                 self.labels = None
                 if len(label_paths) > 0:
@@ -109,6 +110,12 @@ class DataTiler:
             buildings = gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
         elif labels_path.suffix.lower() == '.shp':
             buildings = gpd.read_file(labels_path)
+        elif labels_path.name.endswith('.csv.gz'):
+            # Unzip the .gz file and read it as csv
+            with gzip.open(labels_path, 'rt') as f:
+                df = pd.read_csv(f)
+                df['geometry'] = df['geometry'].apply(wkt.loads)
+                buildings = gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
         
         # Crop to adjust size to images
         if crop:
@@ -260,6 +267,3 @@ class DataTiler:
             
             if self.labels is not None:
                 print(f"Generated {total_tiles} binary mask tiles in folder `tiles/masks`.")
-
-
-            

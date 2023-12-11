@@ -160,6 +160,10 @@ class MapGenerator:
                 # Run inference and save as grayscale image
                 pred, _, _ = self.model.predict(image_file) 
                 output = torch.exp(pred[:, :]).detach().cpu().numpy() 
+
+                if output.min() != output.max():
+                    output = (output - output.min()) / (output.max() - output.min())
+
                 inference_path = self.predict_dir / (image_file.stem +'_inference.tif')
                 with rasterio.open(image_file) as src:
                     profile = src.profile

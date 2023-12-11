@@ -18,10 +18,10 @@ dirs:
 # DATA SETTINGS
 erosion: true
 labels_type: open_buildings_dataset
-root_dir: C:/Users/adm.nkiner/Documents/BEAM/training
+root_dir: F:\SanSalvador_model
 seed: 2022
 test:
-  model_name: U-Net_20231207-1239.pkl
+  model_name: U-Net_20231210-2017.pkl
 test_size: 0.2
 tile_size: 512
 # MODEL SETTINGS
