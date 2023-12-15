@@ -18,25 +18,36 @@ class Test_DataTiler:
 
     @pytest.fixture
     def data_tiler(self, name, tmp_path_factory):
+
+        config = {
+            "dirs": {
+                "tiles": "tiles",
+                "image_tiles": "tiles/images",
+                "images": "images",
+                "labels": "labels",
+                "mask_tiles": "tiles/masks",
+            },
+        }
         tmp_path = tmp_path_factory.mktemp("data_tiler_test")
         input_path = Path("beam_model_training/tests") / name.split('_')[0]
         dir = tmp_path / name
+        config["root_dir"] = dir
         
         
         dir.mkdir(parents=True, exist_ok=True)
-        (dir / "labels").mkdir(parents=True, exist_ok=True)
+        (dir / config["dirs"]["labels"]).mkdir(parents=True, exist_ok=True)
         # Copy labels expect for inference tests
         if not name.endswith('inference'):
-            for file in (input_path / 'labels').iterdir():
-                shutil.copy2(file, dir / 'labels')
+            for file in (input_path / config["dirs"]["labels"]).iterdir():
+                shutil.copy2(file, dir / config["dirs"]["labels"])
 
-        (dir / "images").mkdir(parents=True, exist_ok=True)
-        image_files = list((input_path / "images").iterdir())
+        (dir / config["dirs"]["images"]).mkdir(parents=True, exist_ok=True)
+        image_files = list((input_path / config["dirs"]["images"]).iterdir())
         copy_count = 1 if name.endswith('single') else len(image_files)
         for file in image_files[:copy_count]:
-                shutil.copy2(file, dir / 'images')
+                shutil.copy2(file, dir / config["dirs"]["images"])
         try:
-            yield DataTiler(dir)
+            yield DataTiler(config)
         finally:
             # Clean up after tests.
             time.sleep(3)

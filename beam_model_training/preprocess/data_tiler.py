@@ -34,25 +34,23 @@ class DataTiler:
     Expected output:
     Tiles saved in new sub-directory `tiles/images` and `tiles/masks` (if labels file provided).
     """
-    def __init__(self, input_dir, labels_path=None):
-            self.input_path = Path(input_dir)
+    def __init__(self, config):
+            self.input_path = Path(config["root_dir"])
 
             # Checking for images and loading in DataArrays
-            image_dir = self.input_path / "images"
+            image_dir = self.input_path / config["dirs"]["images"]
             if not image_dir.exists():
-                raise IOError("The input directory must contain an `images` sub-directory.")
+                raise IOError("The directory path `images` does not point to an existing directry in `root_dir`.")
             self.images = self.load_images(image_dir)
 
             # Preparing tiles directory
-            self.output_dir = self.input_path / "tiles"
-            if not self.output_dir.exists():
-                create_if_not_exists(self.output_dir, overwrite=True)
+            self.output_dir = create_if_not_exists(self.input_path / config["dirs"]["tiles"], overwrite=True)
             self.dir_structure = {
-                'image_tiles': create_if_not_exists(self.output_dir / 'images', overwrite=True),
+                'image_tiles': create_if_not_exists(self.input_path / config["dirs"]["image_tiles"], overwrite=True),
             }
             
             # Checking for masks and loading if exist
-            label_paths = list((self.input_path / "labels").iterdir())
+            label_paths = list((self.input_path / config["dirs"]["labels"]).iterdir())
             valid_label_paths = [l for l in label_paths if l.suffix in ['.csv', '.shp'] or l.name.endswith('.csv.gz')]
             if not valid_label_paths:
                 self.labels = None
@@ -66,7 +64,7 @@ class DataTiler:
                 raise IOError("More than one labels file detected. Please provide a single labels file.")
             
             else:
-                self.dir_structure['mask_tiles'] = create_if_not_exists(self.output_dir / 'masks', overwrite=True)
+                self.dir_structure['mask_tiles'] = create_if_not_exists(self.input_path / config["dirs"]["mask_tiles"], overwrite=True)
                 # Loading labels from csv / shapefile.
                 labels_path = valid_label_paths.pop(0)
                 self.labels = self.load_labels(labels_path)
