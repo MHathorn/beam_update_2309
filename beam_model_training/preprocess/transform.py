@@ -1,5 +1,5 @@
 import shutil
-from fastai.vision.all import get_image_files
+from pathlib import Path
 
 from sklearn.model_selection import train_test_split
 from utils.helpers import create_if_not_exists
@@ -43,17 +43,17 @@ def get_rgb_channels(tiff_file_path):
     return rgb_image
 
 
-def gen_train_test(tiles_dir, test_size=0.2, seed=2022):
+def gen_train_test(root_dir, dir_structure, test_size=0.2, seed=2022):
     """
     Splits image and mask files into training and testing sets and moves the testing files to specified directories.
         
     Parameters:
-    tiles_dir (str): The directory containing the image tiles and mask tiles. Expected structure matches the output of the DataTiler:
-    ├── tiles_dir
-        │ ├── images
-        │ │ ├── image.tiff
-        │ ├── masks
-        │ │ ├── mask.tiff
+    root_dir (str): The directory containing all project tiles. 
+    dir_structure (dict): Dictionary representing the relative file structure. It should include the following entries:
+      - image_tiles: Directory containing all image tiles.
+      - mask_tiles: Directory containing all mask_tiles.
+      - train: Train files directory.
+      - test: Test files directory.
     test_size (float, optional): The proportion of the dataset to include in the test split. Default is 0.2.
 
     Returns:
@@ -62,9 +62,9 @@ def gen_train_test(tiles_dir, test_size=0.2, seed=2022):
     Note:
     This function expects mask_files match the name of an image f ile.
     """
-    
-    images_dir = tiles_dir / "images"
-    masks_dir = tiles_dir / "masks"
+    root_dir = Path(root_dir)
+    images_dir = root_dir / dir_structure["image_tiles"]
+    masks_dir = root_dir / dir_structure["mask_tiles"]
 
     # Ensure the source directories exist and no files are missing.
     if not images_dir.exists() or not masks_dir.exists():
@@ -76,15 +76,12 @@ def gen_train_test(tiles_dir, test_size=0.2, seed=2022):
     if len(image_files) != len(list(masks_dir.glob('*'))):
         raise ValueError(f"Mismatch in image and mask count (Images: {len()})")
 
-
-    
-
     # Split the files into training and testing 
     train_files, test_files = train_test_split(image_files, test_size=test_size, random_state=seed)
 
     for dir_name, files in [("test", test_files), ("train", train_files)]:
-        target_images_dir = create_if_not_exists(tiles_dir / dir_name / "images", overwrite=True)
-        target_masks_dir = create_if_not_exists(tiles_dir / dir_name / "masks", overwrite=True)
+        target_images_dir = create_if_not_exists(root_dir / dir_structure[dir_name] / "images", overwrite=True)
+        target_masks_dir = create_if_not_exists(root_dir / dir_structure[dir_name] / "masks", overwrite=True)
         
         for file_path in files:
             rgb_image = get_rgb_channels(file_path)
