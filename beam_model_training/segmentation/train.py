@@ -125,7 +125,7 @@ class Trainer:
         elif tile_size == 256:
             batch_size_dict = {'resnet152': 2, 'resnet101': 2, 'resnet50': 2,
                             'resnet34': 11, 'resnet18': 10, 'hrnet_w18': 64}
-        return batch_size_dict[backbone]
+        return batch_size_dict.get(backbone, 4)
 
 
     def _callbacks(self, timestamp):
@@ -219,8 +219,7 @@ class Trainer:
         if self.architecture.lower() == 'hrnet':
             self.learner = get_segmentation_learner(dls, number_classes=2, segmentation_type="Semantic Segmentation",
                                             architecture_name="hrnet",
-                                            backbone_name=self.backbone, model_dir=self.model_dir, metrics=[Dice(), JaccardCoeff()],
-                                            splitter=trainable_params, pretrained=True)
+                                            backbone_name=self.backbone, model_dir=self.model_dir, metrics=[Dice(), JaccardCoeff()], num_workers=0)
         elif self.architecture.lower() == 'u-net':
             loss_functions = {'Dual_Focal_loss': DualFocalLoss(), 'CombinedLoss': CombinedLoss(),
                             'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None}
@@ -231,8 +230,6 @@ class Trainer:
         save_timestamp = timestamp()
         self.learner.fit_one_cycle(self.epochs, cbs=self._callbacks(save_timestamp))
         self._save(save_timestamp)
-        # with open(self.model_dir / f'config_{save_timestamp}.yaml', 'w') as outfile:
-        #     yaml.dump(self.__dict__, outfile, default_flow_style=False)
 
 
     def _save(self, timestamp):
