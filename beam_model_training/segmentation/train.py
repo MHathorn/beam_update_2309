@@ -138,7 +138,7 @@ class Trainer:
         log_dir = create_if_not_exists(self.model_dir / f'{self.architecture}_{timestamp}_logs')
         csv_path = str(log_dir / 'train_metrics.csv')
         tb_dir = str(log_dir / 'tb_logs/')
-        cbs = [CSVLogger(fname=csv_path, append=True),
+        cbs = [CSVLogger(fname=csv_path),
             ShowGraphCallback(),
             TensorBoardCallback(log_dir=tb_dir)]
         return cbs
@@ -219,7 +219,7 @@ class Trainer:
         if self.architecture.lower() == 'hrnet':
             self.learner = get_segmentation_learner(dls, number_classes=2, segmentation_type="Semantic Segmentation",
                                             architecture_name="hrnet",
-                                            backbone_name=self.backbone, model_dir=self.model_dir, metrics=[Dice(), JaccardCoeff()], num_workers=0)
+                                            backbone_name=self.backbone, model_dir=self.model_dir, metrics=[Dice(), JaccardCoeff()])
         elif self.architecture.lower() == 'u-net':
             loss_functions = {'Dual_Focal_loss': DualFocalLoss(), 'CombinedLoss': CombinedLoss(),
                             'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None}

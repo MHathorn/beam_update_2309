@@ -1,5 +1,7 @@
-**/tiles/
-**/models/
+**/tests/**/tiles
+**/tests/**/models
+**/tests/**/train
+**/tests/**/test
 
 *.pkl
 *.tar.gz

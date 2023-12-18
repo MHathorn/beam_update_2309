@@ -10,6 +10,7 @@ from preprocess.data_tiler import DataTiler
 from preprocess.transform import gen_train_test
 from segmentation.train import Trainer
 from utils.helpers import create_if_not_exists
+import ssl
 
 default_config = {
         "config_name": "satellite_config",
@@ -40,9 +41,11 @@ default_config = {
         }
     }
 
-mock_configs = {"default": default_config,
-                "aerial_images": dict(default_config, root_dir="beam_model_training/tests/aerial")
+mock_configs = {"sat_unet": default_config,
+                "aerial_unet": dict(default_config, root_dir="beam_model_training/tests/aerial")
                 }
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 class TestTrainer:
     
@@ -63,10 +66,10 @@ class TestTrainer:
         finally:
             # Clean up after tests.
             time.sleep(3)
-            shutil.rmtree(input_path / config["dirs"]["tiles"])
-            shutil.rmtree(input_path / config["dirs"]["test"])
-            shutil.rmtree(input_path / config["dirs"]["train"])
-            shutil.rmtree(input_path / config["dirs"]["models"])
+            # shutil.rmtree(input_path / config["dirs"]["tiles"])
+            # shutil.rmtree(input_path / config["dirs"]["test"])
+            # shutil.rmtree(input_path / config["dirs"]["train"])
+            # shutil.rmtree(input_path / config["dirs"]["models"])
 
     def test_map_unique_classes(self, trainer: Trainer):
          
@@ -90,3 +93,7 @@ class TestTrainer:
         mask = trainer._get_mask(image_path, pixel_to_class)
         assert isinstance(mask, PILMask)
         assert mask.size == (config["tile_size"], config["tile_size"])
+
+    # def test_run_export(self, trainer):
+    #     trainer.run()
+    #     assert len(trainer.model_dir.iterdir()) > 0, "No files found in model directory after run"
