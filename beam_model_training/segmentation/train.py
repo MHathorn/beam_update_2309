@@ -229,13 +229,15 @@ class Trainer:
 
         save_timestamp = timestamp()
         self.learner.fit_one_cycle(self.epochs, cbs=self._callbacks(save_timestamp))
-        self._save(save_timestamp)
+        model_path = self._save(save_timestamp)
+        return model_path
 
 
     def _save(self, timestamp):
         
         model_path = str(self.model_dir / f"{self.architecture}_{timestamp}.pkl")
         self.learner.export(model_path)
+        return model_path
 
 
 if __name__ == "__main__":
@@ -243,7 +245,6 @@ if __name__ == "__main__":
     os.environ["OMP_NUM_THREADS"] = "1"
     
     config = load_config("base_config.yaml")
-    seed(config["seed"])
     
     trainer = Trainer(config)
     trainer.run()

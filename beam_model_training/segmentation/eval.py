@@ -76,7 +76,7 @@ class Evaluator:
                 Whether to display the images or save them to disk (default: False).
         """
         shapefiles = [f for f in self.shp_dir.iterdir() if f.name.endswith('.shp')]
-        for shapefile in islice(shapefiles, n_images):
+        for shapefile in islice(shapefiles, 0, n_images):
             if shapefile.name.endswith('.shp'):
                 # Construct the corresponding image file path
                 image_file = shapefile.name.replace('_predicted.shp', '.tif') 
@@ -130,7 +130,7 @@ class Evaluator:
 
         num_files = 0
 
-        gt_images = [f for f in self.masks_dir.iterdir() if f.suffix.lower in ['.tif', '.tiff']]
+        gt_images = [f for f in self.masks_dir.iterdir() if f.suffix.lower() in ['.tif', '.tiff']]
         for groundtruth_path in gt_images:
             pred_mask_path = self.predict_dir / (groundtruth_path.stem +'_inference.tif')
 
@@ -194,7 +194,7 @@ class Evaluator:
             map_gen.create_tile_inferences()
         self.overlay_shapefiles_on_images(n_images)
         metrics = self.compute_metrics()
-        output_file_path = self.output_dir / self.model_name.replace('.csv', 'metrics.csv')
+        output_file_path = self.output_dir / self.model_name.replace('.pkl', '_metrics.csv')
         if output_file_path.exists():
             df = pd.read_csv(output_file_path)
             df = df.append(metrics, ignore_index=True)
@@ -205,4 +205,4 @@ class Evaluator:
 if __name__ == "__main__":
     config = load_config("base_config.yaml")
     evaluator = Evaluator(config)
-    metrics_df = evaluator.evaluate()
+    evaluator.evaluate(n_images=0)

@@ -18,17 +18,16 @@ dirs:
 # DATA SETTINGS
 erosion: true
 labels_type: open_buildings_dataset
-root_dir: F:\SanSalvador_model
+root_dir: F:/ethekwini
 seed: 2022
 test:
-  model_name: U-Net_20231210-2017.pkl
+  model_name: U-Net_20231218-1843.pkl
 test_size: 0.2
 tile_size: 512
 # MODEL SETTINGS
 train:
   architecture: U-Net
   backbone: resnet18
-  epochs: 300
-  fit_type: one_cycle
+  epochs: 30
   loss_function: None
 training: true
