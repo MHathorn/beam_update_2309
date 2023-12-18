@@ -139,8 +139,9 @@ class Trainer:
         csv_path = str(log_dir / 'train_metrics.csv')
         tb_dir = str(log_dir / 'tb_logs/')
         cbs = [CSVLogger(fname=csv_path),
-            ShowGraphCallback(),
-            TensorBoardCallback(log_dir=tb_dir)]
+            ShowGraphCallback()]
+        if self.architecture.lower() == "u-net":
+            cbs.append(TensorBoardCallback(log_dir=tb_dir))
         return cbs
 
 
@@ -219,7 +220,7 @@ class Trainer:
         if self.architecture.lower() == 'hrnet':
             self.learner = get_segmentation_learner(dls, number_classes=2, segmentation_type="Semantic Segmentation",
                                             architecture_name="hrnet",
-                                            backbone_name=self.backbone, model_dir=self.model_dir, metrics=[Dice(), JaccardCoeff()])
+                                            backbone_name=self.backbone, model_dir=self.model_dir, metrics=[Dice()]).to_fp16()
         elif self.architecture.lower() == 'u-net':
             loss_functions = {'Dual_Focal_loss': DualFocalLoss(), 'CombinedLoss': CombinedLoss(),
                             'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None}
@@ -239,6 +240,11 @@ class Trainer:
 
 
 if __name__ == "__main__":
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    os.environ["OMP_NUM_THREADS"] = "1"
+    
     config = load_config("base_config.yaml")
+    seed(config["seed"])
+    
     trainer = Trainer(config)
     trainer.run()
