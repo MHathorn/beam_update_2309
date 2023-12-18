@@ -1,4 +1,5 @@
 import shutil
+import ssl
 import time
 from pathlib import Path
 from typing import Any
@@ -10,24 +11,22 @@ from preprocess.data_tiler import DataTiler
 from preprocess.transform import gen_train_test
 from segmentation.train import Trainer
 from utils.helpers import create_if_not_exists
-import ssl
 
 default_config = {
         "config_name": "satellite_config",
         "config_value": {
-            "seed": 42,
+            "seed": 2022,
             "codes": ["Background", "Building"],
-            "tile_size": 256,
+            "tile_size": 512,
             "test_size": 0.2,
             "train": {
                 "architecture": "u-net",
-                "backbone": "resnet34",
-                "fit_type": "one_cycle",
+                "backbone": "resnet18",
                 "epochs": 10,
-                "loss_function": "CombinedLoss",
+                "loss_function": None,
                 "batch_size": 8
             },
-            "root_dir": "beam_model_training/tests/satellite",
+            "root_dir": "satellite",
             "dirs": {
                 "models": "models",
                 "train": "train",
@@ -40,10 +39,13 @@ default_config = {
             },
         }
     }
+mock_configs = {
+    "sat_unet": default_config,
+    "aerial_unet": dict(default_config, root_dir="aerial"),
+    "sat_hrnet_w18": dict(default_config, architecture="HRNet", backbone="hrnet_w18"),
+    "aerial_hrnet_w18": dict(default_config, root_dir="aerial", architecture="HRNet", backbone="hrnet_w18")
+}
 
-mock_configs = {"sat_unet": default_config,
-                "aerial_unet": dict(default_config, root_dir="beam_model_training/tests/aerial")
-                }
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -55,8 +57,9 @@ class TestTrainer:
 
     @pytest.fixture
     def trainer(self, config: Any):
-        input_path = Path(config["root_dir"])
-        tiles_path = input_path / "tiles"
+        current_dir = Path(__file__).parent.resolve()
+        config["root_dir"] = current_dir / config["root_dir"]
+        tiles_path = config["root_dir"] / config["dirs"]["tiles"]
         if not tiles_path.exists():
             data_tiler = DataTiler(config)
             data_tiler.generate_tiles(config["tile_size"])
@@ -66,10 +69,10 @@ class TestTrainer:
         finally:
             # Clean up after tests.
             time.sleep(3)
-            # shutil.rmtree(input_path / config["dirs"]["tiles"])
-            # shutil.rmtree(input_path / config["dirs"]["test"])
-            # shutil.rmtree(input_path / config["dirs"]["train"])
-            # shutil.rmtree(input_path / config["dirs"]["models"])
+            # shutil.rmtree(config["root_dir"] / config["dirs"]["tiles"])
+            # shutil.rmtree(config["root_dir"] / config["dirs"]["test"])
+            # shutil.rmtree(config["root_dir"] / config["dirs"]["train"])
+            shutil.rmtree(config["root_dir"] / config["dirs"]["models"])
 
     def test_map_unique_classes(self, trainer: Trainer):
          
@@ -94,6 +97,23 @@ class TestTrainer:
         assert isinstance(mask, PILMask)
         assert mask.size == (config["tile_size"], config["tile_size"])
 
-    # def test_run_export(self, trainer):
-    #     trainer.run()
-    #     assert len(trainer.model_dir.iterdir()) > 0, "No files found in model directory after run"
+    def test_run(self, trainer):
+        with patch('segmentation.train.get_segmentation_learner') as MockGetSegmentationLearner, \
+            patch('segmentation.train.unet_learner') as MockUnetLearner, \
+            patch('segmentation.train.Trainer._save') as MockSave:
+            
+            mock_get_segmentation_learner = MockGetSegmentationLearner.return_value
+            mock_unet_learner = MockUnetLearner.return_value
+
+            trainer.run()
+
+            # Assert that either get_segmentation_learner or unet_learner was called once
+            assert MockGetSegmentationLearner.call_count + MockUnetLearner.call_count == 1
+
+            # Assert that the fit_one_cycle method was called on the learner instance
+            if trainer.architecture.lower() == 'hrnet':
+                mock_get_segmentation_learner.fit_one_cycle.assert_called_once()
+            elif trainer.architecture.lower() == 'u-net':
+                mock_unet_learner.fit_one_cycle.assert_called_once()
+
+            MockSave.assert_called_once()

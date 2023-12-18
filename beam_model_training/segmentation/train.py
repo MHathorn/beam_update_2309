@@ -39,7 +39,6 @@ class Trainer:
             learn_args = config["train"]
             self.architecture = learn_args["architecture"]
             self.backbone = learn_args["backbone"]
-            self.fit_type = learn_args["fit_type"]
             self.epochs = learn_args["epochs"]
             self.loss_function = learn_args.get("loss_function")
             self.batch_size = learn_args.get("batch_size", self._get_batch_size(self.tile_size, self.backbone))
