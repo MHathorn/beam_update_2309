@@ -52,6 +52,7 @@ class MapGenerator:
             self.images_dir = path / config["dirs"]["test"] / "images"
             self.shp_dir = create_if_not_exists(path / config["dirs"]["shapefiles"], overwrite=True)
             self.predict_dir = create_if_not_exists(path / config["dirs"]["predictions"], overwrite=True)
+            self.erosion = config["erosion"]
 
             infer_args = config["test"]
             model_path = path / config["dirs"]["models"] / infer_args["model_name"]
@@ -100,8 +101,9 @@ class MapGenerator:
             mask_array = np.array(mask_array)
 
         # Dilate the mask with a 3x3 square kernel. This is the inverse of the erosion applied in preprocessing
-        kernel = np.ones((3, 3), np.uint8)
-        mask_array = cv2.dilate(mask_array, kernel, iterations=1)
+        if self.erosion:
+            kernel = np.ones((3, 3), np.uint8)
+            mask_array = cv2.dilate(mask_array, kernel, iterations=1)
         shapes = rasterio.features.shapes(mask_array, transform=raster_meta["transform"])
         polygons = [
             Polygon(shape[0]["coordinates"][0]) for shape in shapes

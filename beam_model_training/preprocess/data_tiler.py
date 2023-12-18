@@ -44,6 +44,7 @@ class DataTiler:
             self.images = self.load_images(image_dir)
 
             # Preparing tiles directory
+            self.erosion = config["erosion"]
             self.output_dir = create_if_not_exists(self.input_path / config["dirs"]["tiles"], overwrite=True)
             self.dir_structure = {
                 'image_tiles': create_if_not_exists(self.input_path / config["dirs"]["image_tiles"], overwrite=True),
@@ -206,8 +207,9 @@ class DataTiler:
             mask = np.full(image_size, 0, dtype=np.uint8)
 
         # Erode mask
-        kernel = np.ones((3, 3), np.uint8)
-        mask = erode(mask, kernel, iterations=1)
+        if self.erosion:
+            kernel = np.ones((3, 3), np.uint8)
+            mask = erode(mask, kernel, iterations=1)
 
         # Save or return mask
         mask_da = xr.DataArray(mask, dims=["y", "x"], coords={'x': image.coords['x'], 'y':image.coords['y']})
