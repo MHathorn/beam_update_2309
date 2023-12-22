@@ -18,7 +18,28 @@ class Trainer:
         Initialize the Trainer class with configuration settings.
 
         Args:
-            config (dict): Configuration settings including seed, data arguments, learning arguments, and directory paths.
+            config (dict): Configuration settings. Contains the following keys:
+                - root_dir (str): The root directory containing all training files.
+                - dirs (dict): Directories for various data and model files. Contains the following keys:
+                    - images (str): The directory where the image tiles are stored.
+                    - shapefiles (str): The directory where the shapefiles will be saved.
+                    - predictions (str): The directory where the prediction files will be saved.
+                    - models (str): The directory where model checkpoints are saved.
+                - erosion (bool): Whether erosion has been applied to building labels in preprocessing.
+                - seed (int): Seed for random number generator.
+                - codes (list): List of unique codes.
+                - tile_size (int): Size of each image tile.
+                - test_size (float): Proportion of data to be used for testing.
+                - train (dict): Training parameters. Contains the following keys:
+                    - architecture (str): Architecture of the model.
+                    - backbone (str): Backbone of the model.
+                    - epochs (int): Number of epochs for training.
+                    - loss_function (str): Loss function for training.
+                    - batch_size (int): Batch size for training.
+
+        Raises:
+            ValueError: If tile size is not a positive integer.
+            KeyError: If a necessary key is missing from the config dictionary.
         """
 
         try:
