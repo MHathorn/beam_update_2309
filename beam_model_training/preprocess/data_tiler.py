@@ -20,7 +20,7 @@ class DataTiler:
     """Data Tiler class. This class takes in an image, tile size, and tile directory, and populates
     the tile directory with image tiles ready for data augmentation and train-test split. 
 
-    Expected directory structure:
+    Expected configuration attributes:
     ├── input_dir
     │ ├── images // A list of files in GeoTIFF format.
     │ │ ├── image.tiff
@@ -140,28 +140,37 @@ class DataTiler:
         return buildings[buildings.intersects(union_bounding_box)]
 
 
-    def create_subdir(self, dir):
+    def count_buildings(self, tile_geom):
         """
-        Create a subdirectory if it does not exist. If the directory exists and is not empty,
-        files will get overwritten.
+        Calculate the number of buildings for a given tile.
 
-        Parameters:
+        Args:
+        - tile_geom (Polygon): The geometry of the tile.
 
         Returns:
-        PosixPath: The path of the created directory.
-
+        - number of buildings
         """
-        dir_path = Path(dir)
-        if not dir_path.exists():
-            dir_path.mkdir(parents=True)
-        elif any(dir_path.iterdir()):
-            print(f"Warning: Output directory is not empty. Overwriting files.")
-            shutil.rmtree(dir_path)  # Delete the directory and its contents
-            dir_path.mkdir(parents=True)
-        return dir_path
-         
+        # Count buildings in the tile
+        buildings_in_tile = self.labels[self.labels.intersects(tile_geom)]
+        num_buildings = len(buildings_in_tile)
 
+
+        return num_buildings
     
+    def calculate_average_confidence(self, tile_geom):
+        """
+        Calculate the average confidence score for buildings within a given tile.
+
+        Args:
+        - tile_geom (Polygon): The geometry of the tile.
+
+        Returns:
+        - float: Average confidence score for the tile.
+        """
+        buildings_in_tile = self.labels[self.labels.intersects(tile_geom)]
+        return buildings_in_tile['confidence'].mean()
+
+
     def generate_mask(self, image, write=False):
         """
         Generate a binary mask from a vector file (shp or geojson).
@@ -235,7 +244,10 @@ class DataTiler:
         
         """
 
+        self.tiles_info = pd.DataFrame(columns=['name', 'num_buildings', 'probability_score', 'is_informal_settlement'])
+        
         for image in self.images:
+            tile_info = {}
             print(f"Tiling image {image.name}...")
             # Load image and corresponding mask as numpy array and retrieve their shape
 
@@ -255,13 +267,25 @@ class DataTiler:
                 for j in range(y_tiles):
 
                     img_tile = image.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
-                    tile_path = self.dir_structure['image_tiles'] / f'{image.name}_r{i}_c{j}.TIF'
-                    img_tile.rio.to_raster(tile_path)
+                    tile_info["name"] = f'{image.name}_r{i}_c{j}.TIF'
+                    tile_path = self.dir_structure['image_tiles'] / tile_info["name"]
+                    tile_geom = box(*img_tile.rio.bounds())
 
                     if self.labels is not None:
                         msk_tile = mask.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
-                        msk_path = self.dir_structure['mask_tiles'] / f'{image.name}_r{i}_c{j}.TIF'
+                        msk_path = self.dir_structure['mask_tiles'] / tile_info["name"]
                         msk_tile.rio.to_raster(msk_path)
+
+                        # Calculate building count and probability score for the tile
+                        tile_info['num_buildings'] = self.count_buildings(tile_geom)
+                        img_tile.attrs['num_buildings'] = tile_info['num_buildings']
+                        if tile_info['num_buildings'] > 0 and 'confidence' in self.labels.columns:
+                            tile_info['probability_score'] = self.calculate_average_confidence(tile_geom)
+                            img_tile.attrs['probability_score'] = tile_info['probability_score']
+
+                    self.tiles_info = self.tiles_info.append(tile_info, ignore_index=True)
+
+                    img_tile.rio.to_raster(tile_path)
             
             print(f"Tiled {image.name} into {total_tiles} tiles in folder `tiles/images`.")
             
