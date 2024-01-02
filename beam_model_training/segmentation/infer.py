@@ -20,16 +20,24 @@ class MapGenerator:
 
     ...
 
-    Attributes
+    Parameters
     ----------
-    images_dir : str
-        The directory where the image tiles are stored.
-    shp_dir : str
-        The directory where the shapefiles will be saved.
-    predict_dir : str
-        The directory where the prediction files will be saved.
-    model : PyTorch model
-        The trained model used for inference.
+    config: dict
+        - root_dir : str
+        The root directory containing all training files. 
+            - images : str
+            The directory where the image tiles are stored.
+            - shapefiles : str
+            The directory where the shapefiles will be saved.
+            - predictions : str
+            The directory where the prediction files will be saved.
+            - models : str
+            The directory where model checkpoints are saved.
+        - erosion : bool
+        Whether erosion has been applied to building labels in preprocessing.
+        - test: dict
+            - model_name : PyTorch model
+            The trained model used for inference.
 
     Methods
     -------

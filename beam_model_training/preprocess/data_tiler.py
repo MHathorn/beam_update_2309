@@ -17,7 +17,7 @@ from utils.helpers import create_if_not_exists
 
 
 class DataTiler:
-    """Data Tiler class. This class takes in an image, tile size, and tile directory, and populates
+    """Data Tiler class. This class loads from the configuration file an image directory, tile size, and tiles directory, and populates
     the tile directory with image tiles ready for data augmentation and train-test split. 
 
     Expected configuration attributes:
@@ -26,13 +26,26 @@ class DataTiler:
     │ │ ├── image.tiff
     │ ├── labels // A shapefile or csv file (in Google Open Buildings Dataset format) containing all labels for the included images.
     │ │ ├── label.shp (optional)
+    If labels are presents in the directry, mask tiles will be created as well.
+    
+
+    Expected configuration attributes:
+    - root_dir: Name of the project directory containing all training files.
+    - tile_size: Size of the output tiles.
+    - dirs: Directory folder paths, relative to the root directory.
+        - images: Images directory.
+        - labels: Labels directory.
+        - tiles: Output directory for all tiles.
+        - image_tiles: Output directory for image tiles.
+        - mask_tiles (optional): Output directory for mask tiles.
+    - erosion: true if erosion should be applied to the labels.
 
     Usage:
     img_tiler = DataTiler(input_dir)
     img_tiler.generate_tiles(tile_size)
 
     Expected output:
-    Tiles saved in new sub-directory `tiles/images` and `tiles/masks` (if labels file provided).
+    Tiles saved in new sub-directory `image_tiles` and `mask_tiles` (if labels file provided).
     """
     def __init__(self, config):
             self.input_path = Path(config["root_dir"])
@@ -74,10 +87,10 @@ class DataTiler:
 
     def load_images(self, image_dir):
         """
-        Loads all GeoTIFF images in the provided image_dir with rioxarray
+        Loads all GeoTIFF images in the provided image_dir with rioxarray.
         
         Parameters:
-
+        image_dir: Images directory.
         Returns:
         xarray.DataArray: All bands stacked in a multidimensional array.
         """
@@ -91,16 +104,19 @@ class DataTiler:
         # Unifying crs across images
         target_crs = images[0].rio.crs
         print("Found images:", len(images))
-        return [img.rio.reproject(target_crs) for img in images]
-            
+        return [img.rio.reproject(target_crs) for img in images]     
 
 
     def load_labels(self, labels_path, crop=True):
         """
-        This loads building footprints from a vector file and stores them as an object attribute.
-        TODO: Add support for other mask types beyond Open Buildings Dataset.
+        This loads building footprints from a vector file and stores them as an instance attribute.
 
         Parameters:
+        labels_path: Path to labels file, in .csv, .shp or .csv.gz format.
+        crop: True if labels datafame should be adapted to the size of the images dataset.
+
+        Returns:
+        GeoDataFrame: A geo dataframe containing all building labels.
         """
         if labels_path.suffix.lower() == '.csv':
             # Expecting here Google's Open Buildings Dataset format.
@@ -120,7 +136,6 @@ class DataTiler:
         if crop:
             return self.crop_labels(buildings)
         return buildings
-
             
     
     def crop_labels(self, buildings):
@@ -237,10 +252,14 @@ class DataTiler:
     
     def generate_tiles(self, tile_size, write_tmp_files=False):
         """
-        This method tiles both images and masks (if any) and stores them as .png files.
+        This method tiles both images and masks (if any) and stores them as .tif files.
 
         The tiled images are saved in the 'image_tiles' directory and the tiled masks (if any) are saved in the 'mask_tiles' directory.
         The naming convention for the tiled images and masks is '{original_file_name}_r{row_index}_c{column_index}.png'.
+        
+        Parameters:
+        tile_size: Size of the output tiles.
+        write_tmp_files: True if the mask should be stored before tiling. 
         
         """
 

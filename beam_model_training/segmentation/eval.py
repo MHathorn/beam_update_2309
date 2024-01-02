@@ -40,7 +40,15 @@ class Evaluator:
         Parameters
         ----------
             config : dict
-                Configuration parameters.
+                - root_dir: Path to the root directory containing model and dataset.
+                - dirs: Directory paths relative to the root directory.
+                    - test: Contains all test files.
+                    - shapefiles: Contains predicted shapefiles.
+                    - predictions: Contains image predictions.
+                    - eval: Contains evaluation files (metrics, images).
+                    - models: Contains model checkpoints.
+                - test: 
+                 - model_name: The name of the model stored in the models directory.
         """
 
         try:
