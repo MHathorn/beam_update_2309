@@ -266,7 +266,6 @@ class DataTiler:
         self.tiles_info = pd.DataFrame(columns=['name', 'num_buildings', 'probability_score', 'is_informal_settlement'])
         
         for image in self.images:
-            tile_info = {}
             print(f"Tiling image {image.name}...")
             # Load image and corresponding mask as numpy array and retrieve their shape
 
@@ -286,23 +285,21 @@ class DataTiler:
                 for j in range(y_tiles):
 
                     img_tile = image.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
-                    tile_info["name"] = f'{image.name}_r{i}_c{j}.TIF'
-                    tile_path = self.dir_structure['image_tiles'] / tile_info["name"]
+                    tile_name = f'{image.name}_r{i}_c{j}.TIF'
+                    tile_path = self.dir_structure['image_tiles'] / tile_name
                     tile_geom = box(*img_tile.rio.bounds())
 
                     if self.labels is not None:
                         msk_tile = mask.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
-                        msk_path = self.dir_structure['mask_tiles'] / tile_info["name"]
+                        msk_path = self.dir_structure['mask_tiles'] / tile_name
                         msk_tile.rio.to_raster(msk_path)
 
                         # Calculate building count and probability score for the tile
-                        tile_info['num_buildings'] = self.count_buildings(tile_geom)
-                        img_tile.attrs['num_buildings'] = tile_info['num_buildings']
-                        if tile_info['num_buildings'] > 0 and 'confidence' in self.labels.columns:
-                            tile_info['probability_score'] = self.calculate_average_confidence(tile_geom)
-                            img_tile.attrs['probability_score'] = tile_info['probability_score']
+                        num_buildings = self.count_buildings(tile_geom)
+                        img_tile.attrs['num_buildings'] = num_buildings
+                        if num_buildings > 0 and 'confidence' in self.labels.columns:
+                            img_tile.attrs['probability_score'] = self.calculate_average_confidence(tile_geom)
 
-                    self.tiles_info = self.tiles_info.append(tile_info, ignore_index=True)
 
                     img_tile.rio.to_raster(tile_path)
             
