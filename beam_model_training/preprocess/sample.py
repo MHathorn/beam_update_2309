@@ -1,3 +1,5 @@
+import json
+import shutil
 from pathlib import Path
 
 import geopandas as gpd
@@ -5,9 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import rioxarray as rxr
-from preprocess.transform import get_rgb_channels
-from shapely.geometry import box
-from utils.helpers import create_if_not_exists, seed
+from shapely.geometry import box, shape
+from utils.helpers import create_if_not_exists, seed, crs_to_pixel_coords, multiband_to_png
 
 
 def load_tile_info(tile_path):
@@ -57,21 +58,91 @@ def sample_tiles(tile_directory, settlements_shapefile, sample_size):
 
     return sampled_tiles['tile_path'].tolist()
 
+
+
+def convert_to_json(label_file, tiff_file, output_file, tile_size=512):
+    # Load your GeoDataFrame
+    gdf = gpd.read_file(label_file)
+
+    # Load your image tile as a DataArray
+    image_tile = rxr.open_rasterio(tiff_file)
+
+    # Iterate over GeoDataFrame and build JSON
+    json_data = []
+    for _, row in gdf.iterrows():
+        geom = row['geometry']
+
+        if geom.geom_type == 'MultiPolygon':
+            polygons = list(geom.geoms)
+        else:
+            polygons = [geom]
+
+        for index, polygon in enumerate(polygons):
+            pixel_coords = []
+            
+        # Convert each point in the geometry to pixel coordinates
+            for x, y in polygon.exterior.coords:
+                px, py = crs_to_pixel_coords(x, y, image_tile.rio.transform())
+                pixel_coords.append([100.0 * px / tile_size, 100.0 * py / tile_size])
+
+            polygon_json = {
+            "type": "polygon",
+            "from_name": "polygon",
+            "to_name": "image",
+            "original_width": tile_size,
+            "original_height": tile_size,
+            "id": index,
+            "value": {
+                "points": pixel_coords
+                },
+            }
+
+            json_data.append(polygon_json)
+
+    # Wrap in the overall JSON structure
+    final_json = [{
+        "data": {
+            "image": "/data/upload/2/" + tiff_file.name
+        },
+        "predictions": [
+            {
+                "model_version": "google",
+                "result": json_data
+            }
+        ]
+    }]
+
+    # Export to JSON file
+    with open(output_file, 'w') as f:
+        json.dump(final_json, f, indent=4)
+
 # Example usage
 if __name__ == '__main__':
     seed(2022)
-    input_dir = Path("C:/Users/natha/OneDrive/Desktop/Local_Training/tiles/images")
-    output_dir = create_if_not_exists(input_dir.parent / "sample_png")
-    sampled_tile_paths = sample_tiles("C:/Users/natha/OneDrive/Desktop/Local_Training/tiles/images", "C:/Users/natha/OneDrive/Desktop/Local_Training/Costa_Rica/PR05_Asentamientos_Informales_MIVAH_2023_2.shp", 20)
-    print(sampled_tile_paths)
-    for file_path in sampled_tile_paths:
-        tiff_file = Path(file_path)
-        png_file = output_dir / tiff_file.with_suffix('.png').name
+    input_dir = Path("F:/Labeling_SanSalvador/tiles/images")
+    label_dir = Path("F:/Labeling_SanSalvador/tiles/labels")
+    output_dir = create_if_not_exists(input_dir.parent / "sample/images", overwrite=True)
+    output_label_dir = create_if_not_exists(input_dir.parent / "sample/labels", overwrite=True)
+    output_json_dir = create_if_not_exists(input_dir.parent / "sample/json", overwrite=True)  
 
-    # Open the TIFF file and convert it to PNG
-        try:
-            img = get_rgb_channels(tiff_file)
-            plt.imsave(png_file, np.transpose(img.values, (1,2,0)))   
-            print(f"Converted {tiff_file} to {png_file}")
-        except Exception as e:
-            print(f"An error occurred while converting {tiff_file}: {e}")
+    
+    sampled_tile_paths = sample_tiles(input_dir, "F:/Labeling_SanSalvador/AOIs/ElSavaldor.shp", 20)
+
+    print(sampled_tile_paths)
+
+    for file_path in sampled_tile_paths:
+        shutil.copy2(file_path, output_dir / file_path.name)
+
+        # Get the base name of the image file (without extension)
+        base_name = file_path.stem
+        
+        # Find all files in the label directory that start with the base name
+        label_files = list(label_dir.glob(f"{base_name}.*"))
+        
+        # Copy each matching label file to the output label directory
+        for label_file in label_files:
+            if label_file.suffix == '.shp':
+                output_json_file = output_json_dir / f"{base_name}.json"
+                convert_to_json(label_file, file_path, output_json_file)
+            shutil.copy2(label_file, output_label_dir / label_file.name)
+

@@ -2,45 +2,9 @@ import shutil
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
-from utils.helpers import create_if_not_exists
+from utils.helpers import create_if_not_exists, get_rgb_channels
 
-import rioxarray
 
-def get_rgb_channels(tiff_file_path):
-    """
-    Get RGB channels from varying format TIFF files.
-
-    Reads a TIFF file using rioxarray and converts it to an RGB image.
-    It supports RGBA images and Worldview-3 multi-band satellite images. For RGBA images, 
-    the first three bands are used for RGB. For multi-band satellite images, 
-    bands for red (4), green (2), and blue (1) are selected.
-
-    Parameters:
-    tiff_file_path (str): The path of the TIFF file to be converted.
-
-    Returns:
-    xarray.DataArray: The resulting RGB image.
-
-    Raises:
-    IOError: If the provided file is not in TIFF format.
-    ValueError: If the number of bands in the image is unexpected.
-    """
-
-    if not tiff_file_path.suffix.lower() in ('.tif', '.tiff'):
-        raise IOError(f"Expecting tiff file format for conversion ({tiff_file_path.name}).")
-    
-    riox_img = rioxarray.open_rasterio(tiff_file_path)
-    num_bands = riox_img.shape[0]
-
-    if num_bands == 4:  # RGBA image
-        rgb_image = riox_img.sel(band=[1, 2, 3])
-    elif num_bands == 8:  # Worlview-3 satellite image
-        # Select bands for red (4), green (2), and blue (1)
-        rgb_image = riox_img.sel(band=[4, 2, 1])
-    else:
-        raise ValueError("Unexpected number of bands.")
-
-    return rgb_image
 
 
 def gen_train_test(root_dir, dir_structure, test_size=0.2, seed=2022):
