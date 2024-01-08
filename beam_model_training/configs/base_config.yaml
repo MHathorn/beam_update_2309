@@ -9,6 +9,7 @@ dirs:
   images: images
   labels: labels
   mask_tiles: tiles/masks
+  label_tiles: tiles/labels
   models: models
   predictions: predict/masks
   shapefiles: predict/shapefiles
@@ -17,8 +18,7 @@ dirs:
   train: tiles/train
 # DATA SETTINGS
 erosion: true
-labels_type: open_buildings_dataset
-root_dir: F:/ethekwini
+root_dir: F:/Labeling_SanSalvador
 seed: 2022
 test:
   model_name: U-Net_20231218-1843.pkl

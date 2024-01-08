@@ -79,6 +79,7 @@ class DataTiler:
             
             else:
                 self.dir_structure['mask_tiles'] = create_if_not_exists(self.input_path / config["dirs"]["mask_tiles"], overwrite=True)
+                self.dir_structure['label_tiles'] = create_if_not_exists(self.input_path / config["dirs"]["label_tiles"], overwrite=True)
                 # Loading labels from csv / shapefile.
                 labels_path = valid_label_paths.pop(0)
                 self.labels = self.load_labels(labels_path)
@@ -248,6 +249,13 @@ class DataTiler:
             print(f"Saved mask for {image.name}.")
         
         return mask_da
+    
+    def save_tile_shapefile(self, tile_geom, shp_name):
+        "Save a clipped version of self.labels containing only the polygons of a given tile."
+        clipped_labels = gpd.clip(self.labels, tile_geom)
+        # Save clipped labels as a shapefile
+        clipped_labels_path = self.dir_structure['label_tiles'] / shp_name
+        clipped_labels.to_file(clipped_labels_path)
 
     
     def generate_tiles(self, tile_size, write_tmp_files=False):
@@ -293,6 +301,9 @@ class DataTiler:
                         msk_tile = mask.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
                         msk_path = self.dir_structure['mask_tiles'] / tile_name
                         msk_tile.rio.to_raster(msk_path)
+                        
+                        # Save labels in the appropriate folder.
+                        self.save_tile_shapefile(tile_geom, f'{image.name}_r{i}_c{j}.shp')
 
                         # Calculate building count and probability score for the tile
                         num_buildings = self.count_buildings(tile_geom)
