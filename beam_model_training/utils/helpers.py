@@ -8,6 +8,7 @@ import pytz
 import rioxarray as rxr
 import yaml
 from fastai.vision.all import set_seed, torch
+import matplotlib.pyplot as plt
 
 
 def seed(seed_value=0):

@@ -58,32 +58,22 @@ class DataTiler:
 
             # Preparing tiles directory
             self.erosion = config["erosion"]
-            self.output_dir = create_if_not_exists(self.input_path / config["dirs"]["tiles"], overwrite=True)
-            self.dir_structure = {
-                'image_tiles': create_if_not_exists(self.input_path / config["dirs"]["image_tiles"], overwrite=True),
-            }
+            dir_keys = ["tiles", "image_tiles"] # base directory structure
             
             # Checking for masks and loading if exist
-            label_paths = list((self.input_path / config["dirs"]["labels"]).iterdir())
-            valid_label_paths = [l for l in label_paths if l.suffix in ['.csv', '.shp'] or l.name.endswith('.csv.gz')]
+            label_dir = self.input_path / config["dirs"]["labels"]
+            valid_label_paths = [l for l in label_dir.glob('*') if l.suffix in ['.csv', '.shp'] or l.name.endswith('.csv.gz')]
+
             if not valid_label_paths:
                 self.labels = None
-                if len(label_paths) > 0:
-                    print("Warning: Label files are not in recognized format (shp, csv). Tiling images alone.")
-                else:
-                    print(f"No labels file provided. Tiling images alone.")
-            
-            elif len(valid_label_paths) > 1:
-                print(valid_label_paths)
-                raise IOError("More than one labels file detected. Please provide a single labels file.")
-            
+                print(f"No labels file provided. Tiling images alone." if len(list(label_dir.iterdir())) == 0 else "Warning: Label files are not in recognized format (shp, csv). Tiling images alone.")
             else:
-                self.dir_structure['mask_tiles'] = create_if_not_exists(self.input_path / config["dirs"]["mask_tiles"], overwrite=True)
-                self.dir_structure['label_tiles'] = create_if_not_exists(self.input_path / config["dirs"]["label_tiles"], overwrite=True)
+                dir_keys += ["mask_tiles", "label_tiles"]
                 # Loading labels from csv / shapefile.
-                labels_path = valid_label_paths.pop(0)
-                self.labels = self.load_labels(labels_path)
-                print(f"Loaded vector labels from {labels_path.name}.")
+                self.labels = self.load_labels(valid_label_paths)
+                print(f"Loaded vector labels from {len(valid_label_paths)} label files.")
+            # Creating directory structure
+            self.dir_structure = {key: create_if_not_exists(self.input_path / config["dirs"][key], overwrite=True) for key in dir_keys}
 
 
     def load_images(self, image_dir):
@@ -108,30 +98,37 @@ class DataTiler:
         return [img.rio.reproject(target_crs) for img in images]     
 
 
-    def load_labels(self, labels_path, crop=True):
+    def load_labels(self, labels_files, crop=True):
         """
-        This loads building footprints from a vector file and stores them as an instance attribute.
+        This loads building footprints from one or more vector files and stores them as an instance attribute.
 
         Parameters:
-        labels_path: Path to labels file, in .csv, .shp or .csv.gz format.
+        labels_files: Path to labels file, in .csv, .shp or .csv.gz format.
         crop: True if labels datafame should be adapted to the size of the images dataset.
 
         Returns:
         GeoDataFrame: A geo dataframe containing all building labels.
         """
-        if labels_path.suffix.lower() == '.csv':
-            # Expecting here Google's Open Buildings Dataset format.
-            df = pd.read_csv(labels_path)
-            df['geometry'] = df['geometry'].apply(wkt.loads)
-            buildings = gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
-        elif labels_path.suffix.lower() == '.shp':
-            buildings = gpd.read_file(labels_path)
-        elif labels_path.name.endswith('.csv.gz'):
-            # Unzip the .gz file and read it as csv
-            with gzip.open(labels_path, 'rt') as f:
-                df = pd.read_csv(f)
+
+        buildings = pd.DataFrame()
+
+        for labels_path in labels_files:
+            if labels_path.suffix.lower() == '.csv':
+                # Expecting here Google's Open Buildings Dataset format.
+                df = pd.read_csv(labels_path)
                 df['geometry'] = df['geometry'].apply(wkt.loads)
-                buildings = gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
+                df = gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
+            elif labels_path.suffix.lower() == '.shp':
+                df = gpd.read_file(labels_path)
+            elif labels_path.name.endswith('.csv.gz'):
+                # Unzip the .gz file and read it as csv
+                with gzip.open(labels_path, 'rt') as f:
+                    df = pd.read_csv(f)
+                    df['geometry'] = df['geometry'].apply(wkt.loads)
+                    df = gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
+
+            buildings = pd.concat([buildings, df])
+            buildings.drop_duplicates(inplace=True)
         
         # Crop to adjust size to images
         if crop:
@@ -253,6 +250,7 @@ class DataTiler:
     def save_tile_shapefile(self, tile_geom, shp_name):
         "Save a clipped version of self.labels containing only the polygons of a given tile."
         clipped_labels = gpd.clip(self.labels, tile_geom)
+        clipped_labels = clipped_labels[clipped_labels.geometry.type == 'Polygon']
         # Save clipped labels as a shapefile
         clipped_labels_path = self.dir_structure['label_tiles'] / shp_name
         clipped_labels.to_file(clipped_labels_path)
@@ -293,7 +291,7 @@ class DataTiler:
                 for j in range(y_tiles):
 
                     img_tile = image.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
-                    tile_name = f'{image.name}_r{i}_c{j}.TIF'
+                    tile_name = f'{image.name}_r{j}_c{i}.TIF'
                     tile_path = self.dir_structure['image_tiles'] / tile_name
                     tile_geom = box(*img_tile.rio.bounds())
 
@@ -303,7 +301,7 @@ class DataTiler:
                         msk_tile.rio.to_raster(msk_path)
                         
                         # Save labels in the appropriate folder.
-                        self.save_tile_shapefile(tile_geom, f'{image.name}_r{i}_c{j}.shp')
+                        self.save_tile_shapefile(tile_geom, f'{image.name}_r{j}_c{i}.shp')
 
                         # Calculate building count and probability score for the tile
                         num_buildings = self.count_buildings(tile_geom)
