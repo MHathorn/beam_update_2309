@@ -44,28 +44,14 @@ class Trainer:
 
         try:
         # Load and initialize random seed
-            self.seed = config["seed"]
-            seed(self.seed)
-
-            # Load data arguments
-            self.codes = config["codes"]
-            self.tile_size = config["tile_size"]
-
-            if not self.tile_size or not isinstance(self.tile_size, int):
-                raise ValueError("Tile size must be a positive integer.")
-
-            self.test_size = config["test_size"]
+            self.load_params(config)
+            seed(self.params["seed"])
 
             # Load learning arguments
-            learn_args = config["train"]
-            self.architecture = learn_args["architecture"]
-            self.backbone = learn_args["backbone"]
-            self.epochs = learn_args["epochs"]
-            self.loss_function = learn_args.get("loss_function")
-            self.batch_size = learn_args.get("batch_size", self._get_batch_size(self.tile_size, self.backbone))
+            self.load_train_params(config)
 
             # Load dirs and create if needed
-            path = Path(config["root_dir"])
+            path = Path(self.params["root_dir"])
             self.model_dir = create_if_not_exists(path / config["dirs"]["models"])
             self.train_dir = path / config["dirs"]["train"]
             self.images_dir = self.train_dir / "images"
@@ -76,6 +62,32 @@ class Trainer:
         except KeyError as e:
             raise KeyError(f"Config must have a value for {e} to run the Trainer.")
 
+    def load_params(self, config):
+        params_keys = ["seed", "codes", "tile_size", "test_size", "root_dir"]
+        self.params = dict((k, config[k]) for k in params_keys)
+
+        if not self.params["tile_size"] or not isinstance(self.params["tile_size"], int):
+            raise ValueError("Tile size must be a positive integer.")
+        
+        if self.params["test_size"] < 0 or self.params["test_size"] > 1:
+            raise ValueError("Test size must be a float between 0 and 1.")
+        
+    def load_train_params(self, config):
+        train_keys = ["architecture", "backbone", "epochs", "loss_function", "batch_size"]
+        self.train_params = {}
+        for k in train_keys:
+            if k == "batch_size":
+                self.train_params[k] = config["train"].get(
+                    "batch_size", 
+                    self._get_batch_size(
+                        self.params["tile_size"], 
+                        config["train"]["backbone"]
+                        )
+                    )
+            else:
+                self.train_params[k] = config["train"].get(k)
+
+        assert self.train_params["architecture"].lower() in ["u-net", "hrnet"]
 
     def _map_unique_classes(self, is_partial=False):
         """
@@ -155,12 +167,13 @@ class Trainer:
         Returns:
             list: List of callbacks.
         """
-        log_dir = create_if_not_exists(self.model_dir / f'{self.architecture}_{timestamp}_logs')
+        log_dir = create_if_not_exists(self.model_dir / f'{self.train_params["architecture"]}_{timestamp}_logs')
         csv_path = str(log_dir / 'train_metrics.csv')
         tb_dir = str(log_dir / 'tb_logs/')
         cbs = [CSVLogger(fname=csv_path),
-            ShowGraphCallback()]
-        if self.architecture.lower() == "u-net":
+            ShowGraphCallback(),
+            EarlyStoppingCallback(patience=5)]
+        if self.train_params["architecture"].lower() == "u-net":
             cbs.append(TensorBoardCallback(log_dir=tb_dir))
         return cbs
 
@@ -189,9 +202,9 @@ class Trainer:
         label_func = partial(self.get_y)
 
         # Create dataloader to check building pixels
-        dls = SegmentationDataLoaders.from_label_func(self.images_dir, fnames, label_func=label_func, bs=2, codes=self.codes, seed=self.seed)
+        dls = SegmentationDataLoaders.from_label_func(self.images_dir, fnames, label_func=label_func, bs=2, codes=self.params["codes"], seed=self.params["seed"])
 
-        targs = torch.zeros((0, self.tile_size, self.tile_size))
+        targs = torch.zeros((0, self.params["tile_size"], self.params["tile_size"]))
         # issue here with // execution
         for _, masks in dls[0]:
             targs = torch.cat((targs, masks.cpu()), dim=0)
@@ -233,23 +246,23 @@ class Trainer:
 
         label_func = partial(self.get_y)
 
-        dls = SegmentationDataLoaders.from_label_func(self.images_dir, image_files, label_func=label_func, bs=self.batch_size, codes=self.codes, seed=self.seed,
+        dls = SegmentationDataLoaders.from_label_func(self.images_dir, image_files, label_func=label_func, bs=self.train_params["batch_size"], codes=self.params["codes"], seed=self.params["seed"],
                                                     batch_tfms=tfms,
-                                                    valid_pct=self.test_size, num_workers=0)
+                                                    valid_pct=self.params["test_size"], num_workers=0)
 
-        if self.architecture.lower() == 'hrnet':
+        if self.train_params["architecture"].lower() == 'hrnet':
             self.learner = get_segmentation_learner(dls, number_classes=2, segmentation_type="Semantic Segmentation",
                                             architecture_name="hrnet",
-                                            backbone_name=self.backbone, model_dir=self.model_dir, metrics=[Dice()]).to_fp16()
-        elif self.architecture.lower() == 'u-net':
+                                            backbone_name=self.train_params["backbone"], model_dir=self.model_dir, metrics=[Dice()]).to_fp16()
+        elif self.train_params["architecture"].lower() == 'u-net':
             loss_functions = {'Dual_Focal_loss': DualFocalLoss(), 'CombinedLoss': CombinedLoss(),
                             'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None, 'CrossCombinedLoss': CombinedCrossDiceLoss()}
             backbones = {'resnet18': resnet18, 'resnet34': resnet34, 'resnet50': resnet50,
                         'resnet101': resnet101, 'vgg16_bn': vgg16_bn}
-            self.learner = unet_learner(dls, backbones.get(self.backbone), n_out=2, loss_func=loss_functions.get(self.loss_function), metrics=[Dice(), JaccardCoeff()])
+            self.learner = unet_learner(dls, backbones.get(self.train_params["backbone"]), n_out=2, loss_func=loss_functions.get(self.train_params["loss_function"]), metrics=[Dice(), JaccardCoeff()])
 
         save_timestamp = timestamp()
-        self.learner.fit_one_cycle(self.epochs, cbs=self._callbacks(save_timestamp))
+        self.learner.fit_one_cycle(self.train_params["epochs"], cbs=self._callbacks(save_timestamp))
         model_path = self._save(save_timestamp)
         return model_path
 
