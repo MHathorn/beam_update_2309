@@ -28,6 +28,6 @@ tile_size: 256
 train:
   architecture: U-Net
   backbone: resnet50
-  epochs: 30
-  loss_function: None
+  epochs: 300
+  loss_function: CrossCombinedLoss
 training: true
