@@ -255,9 +255,16 @@ class Trainer:
 
 
     def _save(self, timestamp):
-        
-        model_path = str(self.model_dir / f"{self.architecture}_{timestamp}.pkl")
+    
+        self.model_name = f"{self.train_params['architecture']}_{timestamp}.pkl"
+        model_path = str(self.model_dir / self.model_name)
         self.learner.export(model_path)
+
+        combined_params = {**self.params, **self.train_params}
+        json_path = str(self.model_dir / self.model_name)
+        with open(json_path, 'w') as f:
+            json.dump(combined_params, f)
+
         return model_path
 
 

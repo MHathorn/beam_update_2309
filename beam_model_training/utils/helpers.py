@@ -3,12 +3,12 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytz
 import rioxarray as rxr
 import yaml
 from fastai.vision.all import set_seed, torch
-import matplotlib.pyplot as plt
 
 
 def seed(seed_value=0):
@@ -33,7 +33,7 @@ def load_config(config_name):
     config_path = default_config.parent / config_name
 
     if not default_config.exists():
-         raise ImportError("Configs file not found. Make sure the configs/ directory location is correct.")
+         raise ImportError("Configs default file not found. Make sure the configs/ directory location is correct and base_config exists.")
     if not config_path.exists():
         raise IOError(f"Config file {config_path} not found. Make sure the name is correct.")
     
