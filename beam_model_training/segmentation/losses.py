@@ -20,6 +20,26 @@ class CombinedLoss:
 
     def activation(self, x): return F.softmax(x, dim=self.axis)
 
+class CombinedCrossDiceLoss:
+    """
+    Cross Entropy and Dice combined
+    """
+
+    def __init__(self, pixel_weights=None, smooth=1., alpha=1.):
+        store_attr()
+        self.cross_entropy_loss = CrossEntropyLossFlat(weight=pixel_weights)
+        self.dice_loss = DiceLoss(smooth)
+
+    def __call__(self, pred, targ):
+        return self.cross_entropy_loss(pred, targ) + self.alpha * self.dice_loss(pred, targ)
+
+    def decodes(self, x):
+        return x.argmax(dim=self.axis)
+
+    def activation(self, x):
+        return F.softmax(x, dim=self.axis)
+
+
 
 class DualFocalLoss(nn.Module):
     """

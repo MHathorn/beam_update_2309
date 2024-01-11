@@ -6,7 +6,7 @@ import xarray as xr
 from fastai.vision.all import *
 from fastai.callback.tensorboard import TensorBoardCallback
 from semtorch import get_segmentation_learner
-from segmentation.losses import CombinedLoss, DualFocalLoss
+from segmentation.losses import CombinedLoss, DualFocalLoss, CombinedCrossDiceLoss
 from utils.helpers import create_if_not_exists, load_config, seed, timestamp
 
 # Set path of root folder of images and masks
@@ -243,7 +243,7 @@ class Trainer:
                                             backbone_name=self.backbone, model_dir=self.model_dir, metrics=[Dice()]).to_fp16()
         elif self.architecture.lower() == 'u-net':
             loss_functions = {'Dual_Focal_loss': DualFocalLoss(), 'CombinedLoss': CombinedLoss(),
-                            'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None}
+                            'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None, 'CrossCombinedLoss': CombinedCrossDiceLoss()}
             backbones = {'resnet18': resnet18, 'resnet34': resnet34, 'resnet50': resnet50,
                         'resnet101': resnet101, 'vgg16_bn': vgg16_bn}
             self.learner = unet_learner(dls, backbones.get(self.backbone), n_out=2, loss_func=loss_functions.get(self.loss_function), metrics=[Dice(), JaccardCoeff()])
