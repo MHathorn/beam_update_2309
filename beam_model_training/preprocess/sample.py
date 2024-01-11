@@ -8,7 +8,9 @@ import numpy as np
 import pandas as pd
 import rioxarray as rxr
 from shapely.geometry import box, shape
-from utils.helpers import create_if_not_exists, seed, crs_to_pixel_coords, multiband_to_png
+from utils.helpers import create_if_not_exists, load_config, seed, crs_to_pixel_coords, multiband_to_png
+
+from preprocess.data_tiler import DataTiler
 
 
 def load_tile_info(tile_path):
@@ -33,7 +35,7 @@ def calculate_score(num_buildings, probability_score, in_settlement):
     sampling_score = (1 - probability_score) if num_buildings > 10 else 0.5
 
     if in_settlement:
-        sampling_score *= 4  # Boost for informal settlements
+        sampling_score *= 6  # Boost for informal settlements
 
     return sampling_score
 
@@ -60,7 +62,7 @@ def sample_tiles(tile_directory, settlements_shapefile, sample_size):
 
 
 
-def convert_to_json(label_file, tiff_file, output_file, tile_size=512):
+def generate_label_json(label_file, tiff_file, output_file, tile_size=512):
     # Load your GeoDataFrame
     gdf = gpd.read_file(label_file)
 
@@ -116,33 +118,5 @@ def convert_to_json(label_file, tiff_file, output_file, tile_size=512):
     with open(output_file, 'w') as f:
         json.dump(final_json, f, indent=4)
 
-# Example usage
-if __name__ == '__main__':
-    seed(2022)
-    input_dir = Path("F:/Labeling_SanSalvador/tiles/images")
-    label_dir = Path("F:/Labeling_SanSalvador/tiles/labels")
-    output_dir = create_if_not_exists(input_dir.parent / "sample/images", overwrite=True)
-    output_label_dir = create_if_not_exists(input_dir.parent / "sample/labels", overwrite=True)
-    output_json_dir = create_if_not_exists(input_dir.parent / "sample/json", overwrite=True)  
 
-    
-    sampled_tile_paths = sample_tiles(input_dir, "F:/Labeling_SanSalvador/AOIs/ElSavaldor.shp", 20)
-
-    print(sampled_tile_paths)
-
-    for file_path in sampled_tile_paths:
-        shutil.copy2(file_path, output_dir / file_path.name)
-
-        # Get the base name of the image file (without extension)
-        base_name = file_path.stem
-        
-        # Find all files in the label directory that start with the base name
-        label_files = list(label_dir.glob(f"{base_name}.*"))
-        
-        # Copy each matching label file to the output label directory
-        for label_file in label_files:
-            if label_file.suffix == '.shp':
-                output_json_file = output_json_dir / f"{base_name}.json"
-                convert_to_json(label_file, file_path, output_json_file)
-            shutil.copy2(label_file, output_label_dir / label_file.name)
 
