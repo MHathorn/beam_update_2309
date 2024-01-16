@@ -4,6 +4,8 @@ import ssl
 
 from segmentation.train import Trainer
 from segmentation.eval import Evaluator
+from segmentation.losses import CombinedLoss, DualFocalLoss, CrossCombinedLoss
+
 from utils.helpers import load_config
 
 

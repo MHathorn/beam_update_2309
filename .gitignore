@@ -3,6 +3,8 @@
 **/tests/**/models
 **/tests/**/train
 **/tests/**/test
+**/tests/**/predict
+**/tests/**/eval
 
 *.pkl
 *.tar.gz

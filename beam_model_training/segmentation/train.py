@@ -6,7 +6,7 @@ import xarray as xr
 from fastai.vision.all import *
 from fastai.callback.tensorboard import TensorBoardCallback
 from semtorch import get_segmentation_learner
-from segmentation.losses import CombinedLoss, DualFocalLoss, CombinedCrossDiceLoss
+from segmentation.losses import CombinedLoss, DualFocalLoss, CrossCombinedLoss
 from utils.helpers import create_if_not_exists, load_config, seed, timestamp
 
 # Set path of root folder of images and masks
@@ -68,10 +68,10 @@ class Trainer:
 
         if not self.params["tile_size"] or not isinstance(self.params["tile_size"], int):
             raise ValueError("Tile size must be a positive integer.")
-        
+
         if self.params["test_size"] < 0 or self.params["test_size"] > 1:
             raise ValueError("Test size must be a float between 0 and 1.")
-        
+
     def load_train_params(self, config):
         train_keys = ["architecture", "backbone", "epochs", "loss_function", "batch_size"]
         self.train_params = {}
@@ -172,7 +172,7 @@ class Trainer:
         tb_dir = str(log_dir / 'tb_logs/')
         cbs = [CSVLogger(fname=csv_path),
             ShowGraphCallback(),
-            EarlyStoppingCallback(patience=5)]
+            EarlyStoppingCallback(patience=10)]
         if self.train_params["architecture"].lower() == "u-net":
             cbs.append(TensorBoardCallback(log_dir=tb_dir))
         return cbs
@@ -243,6 +243,7 @@ class Trainer:
                 Saturation(max_lighting=0.5)]
         
         image_files = get_image_files(self.images_dir)
+        self.train_params["batch_size"] = min(self.train_params["batch_size"], len(image_files))
 
         label_func = partial(self.get_y)
 
@@ -256,7 +257,7 @@ class Trainer:
                                             backbone_name=self.train_params["backbone"], model_dir=self.model_dir, metrics=[Dice()]).to_fp16()
         elif self.train_params["architecture"].lower() == 'u-net':
             loss_functions = {'Dual_Focal_loss': DualFocalLoss(), 'CombinedLoss': CombinedLoss(),
-                            'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None, 'CrossCombinedLoss': CombinedCrossDiceLoss()}
+                            'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None, 'CrossCombinedLoss': CrossCombinedLoss()}
             backbones = {'resnet18': resnet18, 'resnet34': resnet34, 'resnet50': resnet50,
                         'resnet101': resnet101, 'vgg16_bn': vgg16_bn}
             self.learner = unet_learner(dls, backbones.get(self.train_params["backbone"]), n_out=2, loss_func=loss_functions.get(self.train_params["loss_function"]), metrics=[Dice(), JaccardCoeff()])
@@ -271,10 +272,12 @@ class Trainer:
     
         self.model_name = f"{self.train_params['architecture']}_{timestamp}.pkl"
         model_path = str(self.model_dir / self.model_name)
+        print(model_path)
         self.learner.export(model_path)
 
         combined_params = {**self.params, **self.train_params}
-        json_path = str(self.model_dir / self.model_name)
+        json_path = str((self.model_dir / self.model_name).with_suffix('.json'))
+        print(json_path)
         with open(json_path, 'w') as f:
             json.dump(combined_params, f)
 
