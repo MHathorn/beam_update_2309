@@ -8,7 +8,7 @@ import numpy as np
 import pytz
 import rioxarray as rxr
 import yaml
-from fastai.vision.all import set_seed, torch
+from fastai.vision.all import set_seed, torch, PILImage
 
 
 def seed(seed_value=0):
@@ -136,3 +136,12 @@ def multiband_to_png(file_path, output_dir):
         print(f"Converted {tiff_file} to {png_file}")
     except Exception as e:
         print(f"An error occurred while converting {tiff_file}: {e}")
+
+
+def get_tile_size(image_path):
+    img = PILImage.create(image_path)
+
+    if img.shape[0] != img.shape[1]:
+        raise ValueError(f"Tiles should be of shape (tile_size, tile_size): {img.shape}")
+
+    return img.shape[0]

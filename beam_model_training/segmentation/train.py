@@ -7,7 +7,7 @@ from fastai.vision.all import *
 from fastai.callback.tensorboard import TensorBoardCallback
 from semtorch import get_segmentation_learner
 from segmentation.losses import CombinedLoss, DualFocalLoss, CrossCombinedLoss
-from utils.helpers import create_if_not_exists, load_config, seed, timestamp
+from utils.helpers import create_if_not_exists, get_tile_size, load_config, seed, timestamp
 
 # Set path of root folder of images and masks
 
@@ -63,29 +63,15 @@ class Trainer:
             raise KeyError(f"Config must have a value for {e} to run the Trainer.")
 
     def load_params(self, config):
-        params_keys = ["seed", "codes", "tile_size", "test_size", "root_dir"]
+        params_keys = ["seed", "codes", "test_size", "root_dir"]
         self.params = dict((k, config[k]) for k in params_keys)
-
-        if not self.params["tile_size"] or not isinstance(self.params["tile_size"], int):
-            raise ValueError("Tile size must be a positive integer.")
 
         if self.params["test_size"] < 0 or self.params["test_size"] > 1:
             raise ValueError("Test size must be a float between 0 and 1.")
 
     def load_train_params(self, config):
         train_keys = ["architecture", "backbone", "epochs", "loss_function", "batch_size"]
-        self.train_params = {}
-        for k in train_keys:
-            if k == "batch_size":
-                self.train_params[k] = config["train"].get(
-                    "batch_size", 
-                    self._get_batch_size(
-                        self.params["tile_size"], 
-                        config["train"]["backbone"]
-                        )
-                    )
-            else:
-                self.train_params[k] = config["train"].get(k)
+        self.train_params = {k: config["train"].get(k) for k in train_keys}
 
         assert self.train_params["architecture"].lower() in ["u-net", "hrnet"]
 
@@ -160,16 +146,15 @@ class Trainer:
         return batch_size_dict.get(backbone, 4)
 
 
-    def _callbacks(self, timestamp):
+    def _callbacks(self):
         """
         Log results in CSV, show progress in graph.
 
         Returns:
             list: List of callbacks.
         """
-        log_dir = create_if_not_exists(self.model_dir / f'{self.train_params["architecture"]}_{timestamp}_logs')
-        csv_path = str(log_dir / 'train_metrics.csv')
-        tb_dir = str(log_dir / 'tb_logs/')
+        csv_path = str(self.run_dir / 'train_metrics.csv')
+        tb_dir = str(self.run_dir / 'tb_logs/')
         cbs = [CSVLogger(fname=csv_path),
             ShowGraphCallback(),
             EarlyStoppingCallback(patience=10)]
@@ -190,37 +175,43 @@ class Trainer:
         """
         return self._get_mask(x, self.p2c_map)
 
-    def check_dataset_balance(self):
+    def check_dataset_balance(self, sample_size=50):
         """
-        Check balance of the dataset.
+        This function checks the balance of the dataset by calculating the ratio of pixels that belong to buildings in each image.
+        It then plots a histogram of these ratios for a sample of images and saves this plot in the 'models' directory.
+        It also prints the mean percentage of pixels belonging to buildings across the sampled images.
+
+        Args:
+            dls: DataLoader containing the images and masks.
+            sample_size: Number of images to sample from the DataLoader.
 
         Returns:
-            Tensor: Percentages of pixels that belong to buildings.
+            Tensor: Percentages of pixels that belong to buildings in each sampled image.
         """
+
+        mask_files = get_image_files(self.masks_dir)
+        if len(mask_files) > sample_size:
+            mask_files = random.sample(mask_files, sample_size)
     
-        fnames = get_image_files(self.images_dir) 
-        label_func = partial(self.get_y)
+        #Expecting constant size throughout the dataset
+        tile_size = self.train_params["tile_size"]
+        total_pixels = tile_size ** 2
 
-        # Create dataloader to check building pixels
-        dls = SegmentationDataLoaders.from_label_func(self.images_dir, fnames, label_func=label_func, bs=2, codes=self.params["codes"], seed=self.params["seed"])
-
-        targs = torch.zeros((0, self.params["tile_size"], self.params["tile_size"]))
-        # issue here with // execution
-        for _, masks in dls[0]:
-            targs = torch.cat((targs, masks.cpu()), dim=0)
-
-        total_pixels = targs.shape[1] ** 2
-        if total_pixels == 0:
-            return 0
+        building_pixels = 0
         
-        percentages = torch.count_nonzero(targs, dim=(1, 2)) / total_pixels
+        for file_path in mask_files:
+            mask = rxr.open_rasterio(file_path)
+            building_pixels += np.count_nonzero(mask.data)
+
+        
+        percentages = building_pixels / (total_pixels * len(mask_files))
         plt.hist(percentages, bins=20)
         plt.ylabel('Number of tiles')
-        plt.xlabel('Ratio of pixels that are of class `building`')
+        plt.xlabel(f'`building` pixel ratio (sample size = {len(mask_files)})')
         plt.gca().spines['top'].set_color('none')
         plt.gca().spines['right'].set_color('none')
-        plt.show()
-        print(f'Mean Percentage of Pixels Belonging to Buildings: {round(percentages.mean().item(), 3)}')
+        plt.savefig(self.run_dir / 'dataset_balance.png')
+        print(f'Mean Percentage of Pixels Belonging to Buildings: {round(percentages, 3)}')
         return percentages
 
 
@@ -233,7 +224,8 @@ class Trainer:
             Learner: Trained model.
             Dataloaders: Dataloaders used for segmentation.
         """
-
+        self.model_name = f"{self.train_params['architecture']}_{timestamp()}"
+        self.run_dir = create_if_not_exists(self.model_dir / self.model_name)
 
         tfms = [*aug_transforms(mult=1.0, do_flip=True, flip_vert=True, max_rotate=40.0, min_zoom=1.0, max_zoom=1.4, max_warp=0.4),
                 Normalize.from_stats(*imagenet_stats),
@@ -243,13 +235,22 @@ class Trainer:
                 Saturation(max_lighting=0.5)]
         
         image_files = get_image_files(self.images_dir)
-        self.train_params["batch_size"] = min(self.train_params["batch_size"], len(image_files))
+        assert len(image_files) > 0, f"The images directory {self.images_dir} does not contain any valid images."
+        self.train_params["tile_size"] = get_tile_size(image_files[0])
+
+        if self.train_params["batch_size"] is None: 
+            self.train_params["batch_size"] = min(
+                self._get_batch_size(self.train_params["tile_size"], self.train_params["tile_size"]),
+                len(image_files)
+            )
 
         label_func = partial(self.get_y)
 
-        dls = SegmentationDataLoaders.from_label_func(self.images_dir, image_files, label_func=label_func, bs=self.train_params["batch_size"], codes=self.params["codes"], seed=self.params["seed"],
-                                                    batch_tfms=tfms,
-                                                    valid_pct=self.params["test_size"], num_workers=0)
+        dls = SegmentationDataLoaders.from_label_func(self.images_dir, image_files, label_func=label_func, 
+                                                      bs=self.train_params["batch_size"], codes=self.params["codes"], seed=self.params["seed"],
+                                                      batch_tfms=tfms, valid_pct=self.params["test_size"], num_workers=0)
+
+        self.check_dataset_balance()
 
         if self.train_params["architecture"].lower() == 'hrnet':
             self.learner = get_segmentation_learner(dls, number_classes=2, segmentation_type="Semantic Segmentation",
@@ -262,22 +263,18 @@ class Trainer:
                         'resnet101': resnet101, 'vgg16_bn': vgg16_bn}
             self.learner = unet_learner(dls, backbones.get(self.train_params["backbone"]), n_out=2, loss_func=loss_functions.get(self.train_params["loss_function"]), metrics=[Dice(), JaccardCoeff()])
 
-        save_timestamp = timestamp()
-        self.learner.fit_one_cycle(self.train_params["epochs"], cbs=self._callbacks(save_timestamp))
-        model_path = self._save(save_timestamp)
+        self.learner.fit_one_cycle(self.train_params["epochs"], cbs=self._callbacks())
+        model_path = self._save()
         return model_path
 
 
-    def _save(self, timestamp):
-    
-        self.model_name = f"{self.train_params['architecture']}_{timestamp}.pkl"
-        model_path = str(self.model_dir / self.model_name)
-        print(model_path)
+    def _save(self):
+        
+        model_path = str((self.run_dir / self.model_name).with_suffix(".pkl"))
         self.learner.export(model_path)
 
         combined_params = {**self.params, **self.train_params}
-        json_path = str((self.model_dir / self.model_name).with_suffix('.json'))
-        print(json_path)
+        json_path = str(self.run_dir / "model_parameters.json")
         with open(json_path, 'w') as f:
             json.dump(combined_params, f)
 
