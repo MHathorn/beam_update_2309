@@ -1,14 +1,11 @@
 import json
-import shutil
 from pathlib import Path
 
 import geopandas as gpd
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import rioxarray as rxr
-from shapely.geometry import box, shape
-from utils.helpers import create_if_not_exists, load_config, seed, crs_to_pixel_coords, multiband_to_png
+from shapely.geometry import box
+from utils.helpers import crs_to_pixel_coords
 
 from preprocess.data_tiler import DataTiler
 
@@ -39,9 +36,14 @@ def calculate_score(num_buildings, probability_score, in_settlement):
 
     return sampling_score
 
-def sample_tiles(tile_directory, settlements_shapefile, sample_size):
+def sample_tiles(tile_directory, shp_dir, sample_size):
     tile_dir = Path(tile_directory)
-    settlements = gpd.read_file(settlements_shapefile)
+
+    settlements = pd.DataFrame()
+    for file_path in shp_dir.iterdir():
+        if file_path.suffix == '.shp':
+            df = gpd.read_file(file_path)
+            settlements = pd.concat([settlements, df])
 
     # Load tiles and calculate scores
     tile_scores = []

@@ -15,17 +15,17 @@ if __name__ == '__main__':
     input_dir =  root_path / config["dirs"]["image_tiles"]
     label_dir = root_path / config["dirs"]["label_tiles"]
 
-    if not input_dir.exists():
-        img_tiler = DataTiler(config)
-        img_tiler.generate_tiles(512)
+    # if not input_dir.exists():
+    #     img_tiler = DataTiler(config)
+    #     img_tiler.generate_tiles(512)
 
-    output_dir = create_if_not_exists(input_dir.parent / "sample/images", overwrite=True)
+    output_dir = create_if_not_exists(input_dir.parent / "sample2/images", overwrite=True)
     
-    output_label_dir = create_if_not_exists(input_dir.parent / "sample/labels", overwrite=True)
+    output_label_dir = create_if_not_exists(input_dir.parent / "sample2/labels", overwrite=True)
     # output_json_dir = create_if_not_exists(input_dir.parent / "sample/json", overwrite=True)  
 
     
-    sampled_tile_paths = sample_tiles(input_dir, root_path / "AOIs/ElSavaldor.shp", 30)
+    sampled_tile_paths = sample_tiles(input_dir, root_path / "AOIs", 80)
 
     print(sampled_tile_paths)
 
@@ -43,8 +43,8 @@ if __name__ == '__main__':
         for label_file in label_files:
             shutil.copy2(label_file, output_label_dir / label_file.name)
 
-    
-    
+    # Tile sample in 128*128
+    config["root_dir"] = output_dir.parent
     img_tiler = DataTiler(config)
     img_tiler.generate_tiles(config["tile_size"])
 
