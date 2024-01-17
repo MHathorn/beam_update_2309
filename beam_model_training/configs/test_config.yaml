@@ -18,7 +18,7 @@ dirs:
   train: tiles/train
 # DATA SETTINGS
 erosion: true
-root_dir: F:/SanSalvador_model
+root_dir: C:\Users\adm.nkiner\Documents\BEAM\app\beam_update_2309\beam_model_training\tests\satellite
 seed: 2022
 test:
   model_name: U-Net_20231218-1843.pkl
@@ -27,7 +27,7 @@ tile_size: 256
 # MODEL SETTINGS
 train:
   architecture: U-Net
-  backbone: resnet50
-  epochs: 30
+  backbone: resnet18
+  epochs: 10
   loss_function: None
 training: true

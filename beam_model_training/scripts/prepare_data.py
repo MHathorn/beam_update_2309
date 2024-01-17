@@ -6,7 +6,7 @@ from preprocess.transform import gen_train_test
 from utils.helpers import seed, load_config
 
 def main():
-    config = load_config("base_config.yaml")
+    config = load_config("test_config.yaml")
     seed(config["seed"])
     
     img_tiler = DataTiler(config)

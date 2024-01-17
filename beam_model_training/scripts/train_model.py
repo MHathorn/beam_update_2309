@@ -29,7 +29,7 @@ def main(config_file):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a model with a specified configuration file.')
-    parser.add_argument('-c', '--config_file', type=str, help='The name of the configuration file.', default="base_config.yaml")
+    parser.add_argument('-c', '--config_file', type=str, help='The name of the configuration file.', default="test_config.yaml")
 
     args = parser.parse_args()
     main(args.config_file)

@@ -288,7 +288,7 @@ if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     os.environ["OMP_NUM_THREADS"] = "1"
     
-    config = load_config("base_config.yaml")
+    config = load_config("test_config.yaml")
     
     trainer = Trainer(config)
     trainer.run()

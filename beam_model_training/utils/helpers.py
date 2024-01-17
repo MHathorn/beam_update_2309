@@ -29,11 +29,11 @@ def load_config(config_name):
     Returns:
     dict: A dictionary containing the loaded configuration.
     """
-    default_config = Path(__file__).parents[1] / "configs" / "base_config.yaml"
+    default_config = Path(__file__).parents[1] / "configs" / "test_config.yaml"
     config_path = default_config.parent / config_name
 
     if not default_config.exists():
-         raise ImportError("Configs default file not found. Make sure the configs/ directory location is correct and base_config exists.")
+         raise ImportError("Configs default file not found. Make sure the configs/ directory location is correct and test_config exists.")
     if not config_path.exists():
         raise IOError(f"Config file {config_path} not found. Make sure the name is correct.")
     

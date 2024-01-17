@@ -186,7 +186,7 @@ class MapGenerator:
                 self._create_shp_from_mask(image_file, output)
 
 if __name__ == "__main__":
-    config = load_config("base_config.yaml")
+    config = load_config("test_config.yaml")
     map_gen = MapGenerator(config)
     map_gen.create_tile_inferences()
 
