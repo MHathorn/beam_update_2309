@@ -2,12 +2,13 @@ import shutil
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
-from utils.helpers import create_if_not_exists, get_rgb_channels
+from utils.helpers import get_rgb_channels
+from utils.base_class import BaseClass
 
 
 
 
-def gen_train_test(root_dir, dir_structure, test_size=0.2, seed=2022):
+def gen_train_test(root_dir, test_size=0.2, seed=2022):
     """
     Splits image and mask files into training and testing sets and moves the testing files to specified directories.
         
@@ -27,8 +28,8 @@ def gen_train_test(root_dir, dir_structure, test_size=0.2, seed=2022):
     This function expects mask_files match the name of an image f ile.
     """
     root_dir = Path(root_dir)
-    images_dir = root_dir / dir_structure["image_tiles"]
-    masks_dir = root_dir / dir_structure["mask_tiles"]
+    images_dir = root_dir / BaseClass.DIR_STRUCTURE["image_tiles"]
+    masks_dir = root_dir / BaseClass.DIR_STRUCTURE["mask_tiles"]
 
     # Ensure the source directories exist and no files are missing.
     if not images_dir.exists() or not masks_dir.exists():
@@ -44,8 +45,8 @@ def gen_train_test(root_dir, dir_structure, test_size=0.2, seed=2022):
     train_files, test_files = train_test_split(image_files, test_size=test_size, random_state=seed)
 
     for dir_name, files in [("test", test_files), ("train", train_files)]:
-        target_images_dir = create_if_not_exists(root_dir / dir_structure[dir_name] / "images", overwrite=True)
-        target_masks_dir = create_if_not_exists(root_dir / dir_structure[dir_name] / "masks", overwrite=True)
+        target_images_dir = BaseClass.create_if_not_exists(root_dir / BaseClass.DIR_STRUCTURE[dir_name] / "images", overwrite=True)
+        target_masks_dir = BaseClass.create_if_not_exists(root_dir / BaseClass.DIR_STRUCTURE[dir_name] / "masks", overwrite=True)
         
         for file_path in files:
             rgb_image = get_rgb_channels(file_path)

@@ -3,25 +3,12 @@
 # Update for general changes, or make a copy for experiments.
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
-dirs:
-  eval: eval
-  image_tiles: tiles/images
-  images: images
-  labels: labels
-  mask_tiles: tiles/masks
-  label_tiles: tiles/labels
-  models: models
-  predictions: predict/masks
-  shapefiles: predict/shapefiles
-  test: tiles/test
-  tiles: tiles
-  train: tiles/train
 # DATA SETTINGS
 erosion: true
 root_dir: F:\SanSalvador_model
 seed: 2022
 test:
-  model_name: U-Net_20231218-1843.pkl
+  model_version: U-Net_20241117-1410
 test_size: 0.2
 tile_size: 512
 # MODEL SETTINGS
@@ -29,5 +16,5 @@ train:
   architecture: U-Net
   backbone: resnet50
   epochs: 300
-  loss_function: None
+  loss_function: CrossCombinedLoss
 training: true

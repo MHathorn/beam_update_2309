@@ -1,5 +1,4 @@
 import random
-import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -49,27 +48,6 @@ def timestamp():
     now = datetime.now(tz)
     date_time = now.strftime("%Y%m%d-%H%M")
     return date_time
-
-def create_if_not_exists(dir, overwrite=False):
-        """
-        Create a directory if it does not exist. Optionally, f the directory exists and is not empty,
-        files will get overwritten.
-
-        Parameters:
-        dir (PosixPath|str): The path of the directory to create.
-
-        Returns:
-        dir_path (PosixPath): The path of the created directory.
-
-        """
-        dir_path = Path(dir)
-        if not dir_path.exists():
-            dir_path.mkdir(parents=True)
-        elif overwrite and any(dir_path.iterdir()):
-            print(f"Warning: {dir_path.name} directory is not empty. Overwriting files.")
-            shutil.rmtree(dir_path)  # Delete the directory and its contents
-            dir_path.mkdir(parents=True)
-        return dir_path
 
 
 def crs_to_pixel_coords(x, y, transform):

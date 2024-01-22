@@ -12,8 +12,8 @@ if __name__ == '__main__':
     seed(config["seed"])
     # Assuming the tiles have already been prepared
     root_path = Path(config["root_dir"])
-    input_dir =  root_path / config["dirs"]["image_tiles"]
-    label_dir = root_path / config["dirs"]["label_tiles"]
+    input_dir =  root_path / DataTiler.DIR_STRUCTURE["image_tiles"]
+    label_dir = root_path / DataTiler.DIR_STRUCTURE["label_tiles"]
 
     # if not input_dir.exists():
     #     img_tiler = DataTiler(config)

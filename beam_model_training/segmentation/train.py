@@ -2,17 +2,18 @@ import random
 
 import numpy as np
 import rioxarray as rxr
+from utils.base_class import BaseClass
 import xarray as xr
 from fastai.vision.all import *
 from fastai.callback.tensorboard import TensorBoardCallback
 from semtorch import get_segmentation_learner
 from segmentation.losses import CombinedLoss, DualFocalLoss, CrossCombinedLoss
-from utils.helpers import create_if_not_exists, get_tile_size, load_config, seed, timestamp
+from utils.helpers import get_tile_size, load_config, seed, timestamp
 
 # Set path of root folder of images and masks
 
 
-class Trainer:
+class Trainer(BaseClass):
     def __init__(self, config):
         """
         Initialize the Trainer class with configuration settings.
@@ -20,11 +21,6 @@ class Trainer:
         Args:
             config (dict): Configuration settings. Contains the following keys:
                 - root_dir (str): The root directory containing all training files.
-                - dirs (dict): Directories for various data and model files. Contains the following keys:
-                    - images (str): The directory where the image tiles are stored.
-                    - shapefiles (str): The directory where the shapefiles will be saved.
-                    - predictions (str): The directory where the prediction files will be saved.
-                    - models (str): The directory where model checkpoints are saved.
                 - erosion (bool): Whether erosion has been applied to building labels in preprocessing.
                 - seed (int): Seed for random number generator.
                 - codes (list): List of unique codes.
@@ -36,35 +32,34 @@ class Trainer:
                     - epochs (int): Number of epochs for training.
                     - loss_function (str): Loss function for training.
                     - batch_size (int): Batch size for training.
+        """
 
+        # Load dirs and create if needed
+        training_dirs = ["models", "train_images", "train_masks"]
+        super().__init__(config, read_dirs=training_dirs)
+
+        
+        # Load and initialize random seed
+        self.load_params(config)
+        seed(self.params["seed"])
+
+        # Load learning arguments
+        self.load_train_params(config)
+        self.p2c_map = self._map_unique_classes()
+        
+
+    def load_params(self, config):
+        """
+        Load and assert general params for training.
         Raises:
             ValueError: If tile size is not a positive integer.
             KeyError: If a necessary key is missing from the config dictionary.
         """
-
+        params_keys = ["seed", "codes", "test_size", "root_dir"]
         try:
-        # Load and initialize random seed
-            self.load_params(config)
-            seed(self.params["seed"])
-
-            # Load learning arguments
-            self.load_train_params(config)
-
-            # Load dirs and create if needed
-            path = Path(self.params["root_dir"])
-            self.model_dir = create_if_not_exists(path / config["dirs"]["models"])
-            self.train_dir = path / config["dirs"]["train"]
-            self.images_dir = self.train_dir / "images"
-
-            # Load masks and initialize mapping
-            self.masks_dir = self.train_dir / "masks"
-            self.p2c_map = self._map_unique_classes()
+            self.params = dict((k, config[k]) for k in params_keys)
         except KeyError as e:
             raise KeyError(f"Config must have a value for {e} to run the Trainer.")
-
-    def load_params(self, config):
-        params_keys = ["seed", "codes", "test_size", "root_dir"]
-        self.params = dict((k, config[k]) for k in params_keys)
 
         if self.params["test_size"] < 0 or self.params["test_size"] > 1:
             raise ValueError("Test size must be a float between 0 and 1.")
@@ -86,7 +81,7 @@ class Trainer:
             dict: A dictionary mapping index to class value.
         """
 
-        mask_files = get_image_files(self.masks_dir)
+        mask_files = get_image_files(self.train_masks_dir)
         if is_partial and len(mask_files) > 10:
             mask_files = random.sample(mask_files, 10) 
 
@@ -189,7 +184,7 @@ class Trainer:
             Tensor: Percentages of pixels that belong to buildings in each sampled image.
         """
 
-        mask_files = get_image_files(self.masks_dir)
+        mask_files = get_image_files(self.train_masks_dir)
         if len(mask_files) > sample_size:
             mask_files = random.sample(mask_files, sample_size)
     
@@ -225,7 +220,7 @@ class Trainer:
             Dataloaders: Dataloaders used for segmentation.
         """
         self.model_name = f"{self.train_params['architecture']}_{timestamp()}"
-        self.run_dir = create_if_not_exists(self.model_dir / self.model_name)
+        self.run_dir = BaseClass.create_if_not_exists(self.models_dir / self.model_name)
 
         tfms = [*aug_transforms(mult=1.0, do_flip=True, flip_vert=True, max_rotate=40.0, min_zoom=1.0, max_zoom=1.4, max_warp=0.4),
                 Normalize.from_stats(*imagenet_stats),
@@ -234,8 +229,8 @@ class Trainer:
                 Hue(max_hue=0.2),
                 Saturation(max_lighting=0.5)]
         
-        image_files = get_image_files(self.images_dir)
-        assert len(image_files) > 0, f"The images directory {self.images_dir} does not contain any valid images."
+        image_files = get_image_files(self.train_images_dir)
+        assert len(image_files) > 0, f"The images directory {self.train_images_dir} does not contain any valid images."
         self.train_params["tile_size"] = get_tile_size(image_files[0])
 
         if self.train_params["batch_size"] is None: 
@@ -246,7 +241,7 @@ class Trainer:
 
         label_func = partial(self.get_y)
 
-        dls = SegmentationDataLoaders.from_label_func(self.images_dir, image_files, label_func=label_func, 
+        dls = SegmentationDataLoaders.from_label_func(self.train_images_dir, image_files, label_func=label_func, 
                                                       bs=self.train_params["batch_size"], codes=self.params["codes"], seed=self.params["seed"],
                                                       batch_tfms=tfms, valid_pct=self.params["test_size"], num_workers=0)
 
@@ -255,7 +250,7 @@ class Trainer:
         if self.train_params["architecture"].lower() == 'hrnet':
             self.learner = get_segmentation_learner(dls, number_classes=2, segmentation_type="Semantic Segmentation",
                                             architecture_name="hrnet",
-                                            backbone_name=self.train_params["backbone"], model_dir=self.model_dir, metrics=[Dice()]).to_fp16()
+                                            backbone_name=self.train_params["backbone"], model_dir=self.models_dir, metrics=[Dice()]).to_fp16()
         elif self.train_params["architecture"].lower() == 'u-net':
             loss_functions = {'Dual_Focal_loss': DualFocalLoss(), 'CombinedLoss': CombinedLoss(),
                             'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None, 'CrossCombinedLoss': CrossCombinedLoss()}

@@ -13,10 +13,10 @@ from shapely import wkt
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 
-from utils.helpers import create_if_not_exists
+from utils.base_class import BaseClass
 
 
-class DataTiler:
+class DataTiler(BaseClass):
     """Data Tiler class. This class loads from the configuration file an image directory, tile size, and tiles directory, and populates
     the tile directory with image tiles ready for data augmentation and train-test split. 
 
@@ -32,49 +32,45 @@ class DataTiler:
     Expected configuration attributes:
     - root_dir: Name of the project directory containing all training files.
     - tile_size: Size of the output tiles.
-    - dirs: Directory folder paths, relative to the root directory.
-        - images: Images directory.
-        - labels: Labels directory.
-        - tiles: Output directory for all tiles.
-        - image_tiles: Output directory for image tiles.
-        - mask_tiles (optional): Output directory for mask tiles.
     - erosion: true if erosion should be applied to the labels.
 
     Usage:
-    img_tiler = DataTiler(input_dir)
+    img_tiler = DataTiler(config)
     img_tiler.generate_tiles(tile_size)
 
     Expected output:
     Tiles saved in new sub-directory `image_tiles` and `mask_tiles` (if labels file provided).
     """
     def __init__(self, config):
-            self.input_path = Path(config["root_dir"])
+            
+            self.root_dir = Path(config["root_dir"])
+            write_dirs = ["image_tiles"]
 
             # Checking for images and loading in DataArrays
-            image_dir = self.input_path / config["dirs"]["images"]
-            if not image_dir.exists():
+            images_dir = self.root_dir / self.DIR_STRUCTURE["images"]
+            if not images_dir.exists():
                 raise IOError("The directory path `images` does not point to an existing directry in `root_dir`.")
-            self.images = self.load_images(image_dir)
+            self.images = self.load_images(images_dir)
 
-            # Preparing tiles directory
-            self.erosion = config["erosion"]
-            dir_keys = ["tiles", "image_tiles"] # base directory structure
-            
             # Checking for masks and loading if exist
-            label_dir = self.input_path / config["dirs"]["labels"]
-            valid_label_paths = [l for l in label_dir.glob('*') if l.suffix in ['.csv', '.shp'] or l.name.endswith('.csv.gz')]
+            labels_dir = self.root_dir / self.DIR_STRUCTURE["labels"]
+            valid_label_paths = [l for l in labels_dir.glob('*') if l.suffix in ['.csv', '.shp'] or l.name.endswith('.csv.gz')]
 
             if not valid_label_paths:
                 self.labels = None
-                print(f"No labels file provided. Tiling images alone." if len(list(label_dir.iterdir())) == 0 else "Warning: Label files are not in recognized format (shp, csv). Tiling images alone.")
+                print(f"No labels file provided. Tiling images alone." if len(list(labels_dir.iterdir())) == 0 else "Warning: Label files are not in recognized format (shp, csv). Tiling images alone.")
             else:
-                dir_keys += ["mask_tiles", "label_tiles"]
+                write_dirs += ["mask_tiles", "label_tiles"]
                 # Loading labels from csv / shapefile.
                 self.labels = self.load_labels(valid_label_paths)
                 print(f"Loaded vector labels from {len(valid_label_paths)} label files.")
-            # Creating directory structure
-            self.dir_structure = {key: create_if_not_exists(self.input_path / config["dirs"][key], overwrite=True) for key in dir_keys}
 
+            super().__init__(config, write_dirs=write_dirs)
+
+            
+
+            # Preparing tiles directory
+            self.erosion = config["erosion"]
 
     def load_images(self, image_dir):
         """
@@ -95,7 +91,7 @@ class DataTiler:
         # Unifying crs across images
         target_crs = images[0].rio.crs
         print("Found images:", len(images))
-        return [img.rio.reproject(target_crs) for img in images]     
+        return [img.rio.reproject(target_crs) for img in images]
 
 
     def load_labels(self, labels_files, crop=True):
@@ -240,7 +236,7 @@ class DataTiler:
 
         if write:
         
-            self.dir_structure['tmp'] = create_if_not_exists(self.input_path / "tmp", overwrite=True)
+            self.dir_structure['tmp'] = BaseClass.create_if_not_exists(self.root_dir / "tmp", overwrite=True)
             mask_path = self.dir_structure['tmp'] / f"{image.name}_mask.tif"
             mask_da.rio.to_raster(mask_path)
             print(f"Saved mask for {image.name}.")
@@ -252,7 +248,7 @@ class DataTiler:
         clipped_labels = gpd.clip(self.labels, tile_geom)
         clipped_labels = clipped_labels[clipped_labels.geometry.type == 'Polygon']
         # Save clipped labels as a shapefile
-        clipped_labels_path = self.dir_structure['label_tiles'] / shp_name
+        clipped_labels_path = self.label_tiles_dir / shp_name
         clipped_labels.to_file(clipped_labels_path)
 
     
@@ -292,12 +288,12 @@ class DataTiler:
 
                     img_tile = image.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
                     tile_name = f'{image.name}_r{j}_c{i}.TIF'
-                    tile_path = self.dir_structure['image_tiles'] / tile_name
+                    tile_path = self.image_tiles_dir / tile_name
                     tile_geom = box(*img_tile.rio.bounds())
 
                     if self.labels is not None:
                         msk_tile = mask.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
-                        msk_path = self.dir_structure['mask_tiles'] / tile_name
+                        msk_path = self.mask_tiles_dir / tile_name
                         msk_tile.rio.to_raster(msk_path)
                         
                         # Save labels in the appropriate folder.

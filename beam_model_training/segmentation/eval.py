@@ -1,8 +1,6 @@
 
-import os
 from datetime import datetime
 from itertools import islice
-from pathlib import Path
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -13,11 +11,11 @@ from fastai.vision.all import load_learner
 from PIL import Image, ImageDraw
 from segmentation.infer import MapGenerator
 from segmentation.train import Trainer
-from utils.helpers import (create_if_not_exists, crs_to_pixel_coords,
-                           load_config)
+from utils.base_class import BaseClass
+from utils.helpers import crs_to_pixel_coords, load_config
 
 
-class Evaluator:
+class Evaluator(BaseClass):
     """
     A class used to evaluate the performance of a segmentation model.
 
@@ -41,34 +39,25 @@ class Evaluator:
         ----------
             config : dict
                 - root_dir: Path to the root directory containing model and dataset.
-                - dirs: Directory paths relative to the root directory.
-                    - test: Contains all test files.
-                    - shapefiles: Contains predicted shapefiles.
-                    - predictions: Contains image predictions.
-                    - eval: Contains evaluation files (metrics, images).
-                    - models: Contains model checkpoints.
                 - test: 
                  - model_name: The name of the model stored in the models directory.
         """
 
+        self.config = config
+        self.model_version = config["test"]["model_version"]
+        self.generate_preds = False
+        read_dirs = ["test_images", "test_masks", "models", "eval"]
+        write_dirs = []
+        if self.generate_preds:
+            write_dirs += ["shapefiles", "predictions"]
+        else:
+            read_dirs += ["shapefiles", "predictions"]
+        super().__init__(config, read_dirs=read_dirs, write_dirs=write_dirs)
         try:
-            path = Path(config["root_dir"])
-        
-            self.images_dir = path / config["dirs"]["test"] / "images"
-            self.masks_dir = path / config["dirs"]["test"] / "masks"
-            self.shp_dir = create_if_not_exists(path / config["dirs"]["shapefiles"])
-            self.predict_dir = create_if_not_exists(path / config["dirs"]["predictions"])
-            self.output_dir = create_if_not_exists(path / config["dirs"]["eval"])
-            self.config = config
-
-            self.generate_preds = True
-
-            infer_args = config["test"]
-            self.model_name = infer_args["model_name"]
-            model_path = path / config["dirs"]["models"] / self.model_name
-            if not model_path.exists():
-                raise ValueError(f"Couldn't find model under {model_path}.")
+            
+            model_path = super().load_model_path(config)
             self.model = load_learner(model_path)
+            
         except KeyError as e:
             raise KeyError(f"Config must have a value for {e}.")
 
@@ -83,7 +72,7 @@ class Evaluator:
             show : bool, optional
                 Whether to display the images or save them to disk (default: False).
         """
-        shapefiles = [f for f in self.shp_dir.iterdir() if f.name.endswith('.shp')]
+        shapefiles = [f for f in self.shapefiles_dir.iterdir() if f.name.endswith('.shp')]
         for shapefile in islice(shapefiles, 0, n_images):
             if shapefile.name.endswith('.shp'):
                 # Construct the corresponding image file path
@@ -113,7 +102,7 @@ class Evaluator:
                             plt.title(image_file)
                             plt.show()
                         else:
-                            output_path = self.output_dir / f"eval_pred_{image_file}"
+                            output_path = self.eval_dir / f"eval_pred_{image_file}"
                             img.save(output_path)
                             print(f"Image file {output_path.name} written to `{output_path.parent.name}`.")
 
@@ -138,9 +127,9 @@ class Evaluator:
 
         num_files = 0
 
-        gt_images = [f for f in self.masks_dir.iterdir() if f.suffix.lower() in ['.tif', '.tiff']]
+        gt_images = [f for f in self.test_masks_dir.iterdir() if f.suffix.lower() in ['.tif', '.tiff']]
         for groundtruth_path in gt_images:
-            pred_mask_path = self.predict_dir / (groundtruth_path.stem +'_inference.tif')
+            pred_mask_path = self.predictions_dir / (groundtruth_path.stem +'_inference.tif')
 
             if pred_mask_path.exists():
                 
@@ -202,7 +191,7 @@ class Evaluator:
             map_gen.create_tile_inferences()
         self.overlay_shapefiles_on_images(n_images)
         metrics = self.compute_metrics()
-        output_file_path = self.output_dir / self.model_name.replace('.pkl', '_metrics.csv')
+        output_file_path = self.eval_dir / (self.model_version + '_metrics.csv')
         if output_file_path.exists():
             df = pd.read_csv(output_file_path)
             df = df.append(metrics, ignore_index=True)
@@ -211,6 +200,6 @@ class Evaluator:
         df.to_csv(output_file_path, index=False)
 
 if __name__ == "__main__":
-    config = load_config("HRNet_config.yaml")
+    config = load_config("UNet_config.yaml")
     evaluator = Evaluator(config)
     evaluator.evaluate(n_images=0)

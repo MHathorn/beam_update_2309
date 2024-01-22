@@ -10,7 +10,6 @@ from fastai.vision.all import PILMask
 from preprocess.data_tiler import DataTiler
 from preprocess.transform import gen_train_test
 from segmentation.train import Trainer
-from utils.helpers import create_if_not_exists
 
 default_config = {
         "config_name": "satellite_config",
@@ -27,16 +26,6 @@ default_config = {
                 "batch_size": 8
             },
             "root_dir": "satellite",
-            "dirs": {
-                "models": "models",
-                "train": "train",
-                "tiles": "tiles",
-                "image_tiles": "tiles/images",
-                "images": "images",
-                "labels": "labels",
-                "mask_tiles": "tiles/masks",
-                "test": "test",
-            },
         }
     }
 mock_configs = {
@@ -59,20 +48,17 @@ class TestTrainer:
     def trainer(self, config: Any):
         current_dir = Path(__file__).parent.resolve()
         config["root_dir"] = current_dir / config["root_dir"]
-        tiles_path = config["root_dir"] / config["dirs"]["tiles"]
+        tiles_path = config["root_dir"] / Trainer.DIR_STRUCTURE["image_tiles"]
         if not tiles_path.exists():
             data_tiler = DataTiler(config)
             data_tiler.generate_tiles(config["tile_size"])
-            gen_train_test(config["root_dir"], config["dirs"], test_size=config["test_size"])
+            gen_train_test(config["root_dir"], test_size=config["test_size"])
         try:
             yield Trainer(config)
         finally:
             # Clean up after tests.
             time.sleep(3)
-            # shutil.rmtree(config["root_dir"] / config["dirs"]["tiles"])
-            # shutil.rmtree(config["root_dir"] / config["dirs"]["test"])
-            # shutil.rmtree(config["root_dir"] / config["dirs"]["train"])
-            shutil.rmtree(config["root_dir"] / config["dirs"]["models"])
+            shutil.rmtree(config["root_dir"] / Trainer.DIR_STRUCTURE["models"])
 
     def test_map_unique_classes(self, trainer: Trainer):
          

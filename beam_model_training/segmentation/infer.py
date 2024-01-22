@@ -3,18 +3,17 @@ from pathlib import Path
 
 import cv2
 import geopandas as gpd
-import matplotlib.pyplot as plt
 import numpy as np
 import rasterio
 import torch
-from fastai.vision.all import get_image_files, load_learner
-from natsort import os_sorted
+from fastai.vision.all import load_learner
 from shapely.geometry import Polygon
 from segmentation.train import Trainer
-from utils.helpers import create_if_not_exists, load_config
+from utils.base_class import BaseClass
+from utils.helpers import load_config
 
 
-class MapGenerator:
+class MapGenerator(BaseClass):
     """
     A class used to generate maps from images using a trained model.
 
@@ -55,20 +54,12 @@ class MapGenerator:
             config : dict
                 Configuration dictionary containing paths and inference arguments.
         """
-        try:
-            path = Path(config["root_dir"])
-            self.images_dir = path / config["dirs"]["test"] / "images"
-            self.shp_dir = create_if_not_exists(path / config["dirs"]["shapefiles"], overwrite=True)
-            self.predict_dir = create_if_not_exists(path / config["dirs"]["predictions"], overwrite=True)
-            self.erosion = config["erosion"]
-
-            infer_args = config["test"]
-            model_path = path / config["dirs"]["models"] / infer_args["model_name"]
-            if not model_path.exists():
-                raise ValueError(f"Couldn't find model under {model_path}.")
-            self.model = load_learner(model_path)
-        except KeyError as e:
-            raise KeyError(f"Config must have a value for {e}.")
+        read_dirs = ["test_images", "models"]
+        write_dirs = ["predictions", "shapefiles"]
+        super().__init__(config, read_dirs=read_dirs, write_dirs=write_dirs)
+        model_path = super().load_model_path(config)
+        self.model = load_learner(model_path)
+        self.erosion = config["erosion"]
     
     def _create_shp_from_mask(self, file, mask_array):
         """
@@ -90,7 +81,7 @@ class MapGenerator:
             raster_meta = src.meta
 
         pred_name = file.stem
-        shp_path = self.shp_dir / f"{pred_name}_predicted.shp"
+        shp_path = self.shapefiles_dir / f"{pred_name}_predicted.shp"
         
         if mask_array is None or len(mask_array) == 1:
             
@@ -162,7 +153,7 @@ class MapGenerator:
         """
         Performs inference on each tile in the images directory and saves the results.
         """
-        images_dir = self.images_dir if images_dir is None else Path(images_dir)
+        images_dir = self.test_images_dir if images_dir is None else Path(images_dir)
 
         for image_file in images_dir.iterdir():
             if image_file.is_file() and image_file.suffix.lower() in ['.tif', '.tiff']:
@@ -174,7 +165,7 @@ class MapGenerator:
                 if output.min() != output.max():
                     output = (output - output.min()) / (output.max() - output.min())
 
-                inference_path = self.predict_dir / (image_file.stem +'_inference.tif')
+                inference_path = self.predictions_dir / (image_file.stem +'_inference.tif')
                 with rasterio.open(image_file) as src:
                     profile = src.profile
                     
