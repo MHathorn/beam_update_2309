@@ -45,8 +45,8 @@ def gen_train_test(root_dir, test_size=0.2, seed=2022):
     train_files, test_files = train_test_split(image_files, test_size=test_size, random_state=seed)
 
     for dir_name, files in [("test", test_files), ("train", train_files)]:
-        target_images_dir = BaseClass.create_if_not_exists(root_dir / BaseClass.DIR_STRUCTURE[dir_name] / "images", overwrite=True)
-        target_masks_dir = BaseClass.create_if_not_exists(root_dir / BaseClass.DIR_STRUCTURE[dir_name] / "masks", overwrite=True)
+        target_images_dir = BaseClass.create_if_not_exists(root_dir / BaseClass.DIR_STRUCTURE[f"{dir_name}_images"], overwrite=True)
+        target_masks_dir = BaseClass.create_if_not_exists(root_dir / BaseClass.DIR_STRUCTURE[f"{dir_name}_masks"], overwrite=True)
         
         for file_path in files:
             rgb_image = get_rgb_channels(file_path)
