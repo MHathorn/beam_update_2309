@@ -77,7 +77,7 @@ class Evaluator(BaseClass):
             if shapefile.name.endswith('.shp'):
                 # Construct the corresponding image file path
                 image_file = shapefile.name.replace('_predicted.shp', '.tif') 
-                image_path = self.images_dir / image_file
+                image_path = self.test_images_dir / image_file
 
                 if image_path.exists():
                     # Read the shapefile
@@ -194,12 +194,12 @@ class Evaluator(BaseClass):
         output_file_path = self.eval_dir / (self.model_version + '_metrics.csv')
         if output_file_path.exists():
             df = pd.read_csv(output_file_path)
-            df = df.append(metrics, ignore_index=True)
+            df = pd.concat([df, metrics], ignore_index=True)
         else:
             df = metrics
         df.to_csv(output_file_path, index=False)
 
 if __name__ == "__main__":
-    config = load_config("UNet_config.yaml")
+    config = load_config("HRNet_config.yaml")
     evaluator = Evaluator(config)
-    evaluator.evaluate(n_images=0)
+    evaluator.evaluate(n_images=10)

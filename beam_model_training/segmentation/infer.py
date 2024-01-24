@@ -164,6 +164,8 @@ class MapGenerator(BaseClass):
 
                 if output.min() != output.max():
                     output = (output - output.min()) / (output.max() - output.min())
+                else:
+                    output = np.zeros_like(output)
 
                 inference_path = self.predictions_dir / (image_file.stem +'_inference.tif')
                 with rasterio.open(image_file) as src:
