@@ -9,6 +9,7 @@ class BaseClass:
         "image_tiles": "tiles/images",
         "mask_tiles": "tiles/masks",
         "label_tiles": "tiles/labels",
+        "weight_tiles": "tiles/weights",
         "models": "models",
         "train_images": "tiles/train/images",
         "train_masks": "tiles/train/masks",

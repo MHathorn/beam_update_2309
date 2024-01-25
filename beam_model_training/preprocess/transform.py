@@ -7,6 +7,36 @@ from utils.base_class import BaseClass
 
 
 
+def count_buildings(buildings, tile_geom):
+    """
+    Calculate the number of buildings for a given tile.
+
+    Args:
+    - buildings (GeoDataframe): Dataset of building labels.
+    - tile_geom (Polygon): The geometry of the tile.
+
+    Returns:
+    - number of buildings
+    """
+    # Count buildings in the tile
+    buildings_in_tile = buildings[buildings.intersects(tile_geom)]
+    num_buildings = len(buildings_in_tile)
+
+    return num_buildings
+
+def calculate_average_confidence(buildings, tile_geom):
+    """
+    Calculate the average confidence score for buildings within a given tile.
+
+    Args:
+    - buildings (GeoDataframe): Dataset of building labels.
+    - tile_geom (Polygon): The geometry of the tile.
+
+    Returns:
+    - float: Average confidence score for the tile.
+    """
+    buildings_in_tile = buildings[buildings.intersects(tile_geom)]
+    return buildings_in_tile['confidence'].mean()
 
 def gen_train_test(root_dir, test_size=0.2, seed=2022):
     """

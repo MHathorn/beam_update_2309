@@ -1,10 +1,11 @@
 
+import argparse
 from preprocess.data_tiler import DataTiler
 from preprocess.transform import gen_train_test
 from utils.helpers import seed, load_config
 
-def main():
-    config = load_config("test_config.yaml")
+def main(config_file):
+    config = load_config(config_file)
     seed(config["seed"])
     
     img_tiler = DataTiler(config)
@@ -15,4 +16,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Train a model with a specified configuration file.')
+    parser.add_argument('-c', '--config_file', type=str, help='The name of the configuration file.', default="test_config.yaml")
+
+    args = parser.parse_args()
+    main(args.config_file)
