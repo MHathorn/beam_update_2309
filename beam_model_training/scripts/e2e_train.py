@@ -11,7 +11,7 @@ def prepare_data(config):
     seed(config["seed"])
     
     img_tiler = DataTiler(config)
-    img_tiler.generate_tiles(config["tile_size"])
+    img_tiler.generate_tiles(config["tiling"]["tile_size"])
 
     if config["training"]:
         gen_train_test(config["root_dir"], test_size=config["test_size"])

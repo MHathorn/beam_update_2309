@@ -45,17 +45,17 @@ class DataTiler(BaseClass):
     def __init__(self, config):
             
             self.root_dir = Path(config["root_dir"])
-            self.erosion = config["erosion"]
-            self.distance_weighting = config["distance_weighting"]
             self.crs = None
             self.spatial_resolution = None
             write_dirs = ["image_tiles"]
+
+            self.tiling_params = self.load_tiling_params(config)
 
             # Checking for images and loading in DataArrays
             images_dir = self.root_dir / self.DIR_STRUCTURE["images"]
             if not images_dir.exists():
                 raise IOError("The directory path `images` does not point to an existing directry in `root_dir`.")
-            self.images = self.load_images(images_dir)
+            self.images_generator = self.load_images(images_dir)
 
             # Checking for masks and loading if exist
             labels_dir = self.root_dir / self.DIR_STRUCTURE["labels"]
@@ -66,7 +66,7 @@ class DataTiler(BaseClass):
                 print(f"No labels file provided. Tiling images alone." if len(list(labels_dir.iterdir())) == 0 else "Warning: Label files are not in recognized format (shp, csv). Tiling images alone.")
             else:
                 write_dirs += ["mask_tiles", "label_tiles"]
-                if self.distance_weighting:
+                if self.tiling_params["distance_weighting"]:
                     write_dirs.append("weight_tiles")
                 # Loading labels from csv / shapefile.
                 self.labels = self.load_labels(valid_label_paths)
@@ -74,7 +74,9 @@ class DataTiler(BaseClass):
 
             super().__init__(config, write_dirs=write_dirs)
 
-            
+    def load_tiling_params(self, config):
+        tiling_keys = ["distance_weighting", "create_tile_shp", "erosion", "tile_size"]
+        return {k: config["tiling"].get(k) for k in tiling_keys}
 
 
     def load_images(self, image_dir):
@@ -83,23 +85,22 @@ class DataTiler(BaseClass):
         
         Parameters:
         image_dir: Images directory.
-        Returns:
-        xarray.DataArray: All bands stacked in a multidimensional array.
+        Yields:
+        xarray.DataArray: Single band from a GeoTIFF image.
         """
         
         filepaths = [img_path for img_path in image_dir.rglob('*') if img_path.suffix.lower() in ['.tif', '.tiff']]
         
         if not filepaths:
             raise IOError(f"The directory {image_dir} does not contain any GeoTIFF images.")
+        self.n_images = len(filepaths)
         
-        images = [rxr.open_rasterio(img_path, default_name=img_path.stem) for img_path in filepaths]
-        # Unifying crs across images
-        self.crs = images[0].rio.crs
-        print("Found images:", len(images))
-        return images
+        for img_path in filepaths:
+            yield rxr.open_rasterio(img_path, default_name=img_path.stem)
 
 
-    def load_labels(self, labels_files, crop=True):
+
+    def load_labels(self, labels_files):
         """
         This loads building footprints from one or more vector files and stores them as an instance attribute.
 
@@ -143,41 +144,36 @@ class DataTiler(BaseClass):
         print(f"Deduplicating..")
         buildings = buildings.drop_duplicates()
         
-        if buildings.crs != self.crs:
-            buildings = buildings.to_crs(self.crs)
-
-        # Crop to adjust size to images
-        if crop:
-            return self.crop_labels(buildings)
-        
         print(f"Loaded {len(buildings)} labels for the imaged region.")
         return buildings
             
     
-    def crop_labels(self, buildings):
+    def crop_labels(self, image):
         """
+        This method crops labels based on the bounding box of the input image.
 
         Parameters:
-        buildings (GeoDataFrame): A GeoDataFrame containing the building geometries.
+        image: The input image whose bounding box will be used to crop the labels.
 
         Returns:
-        GeoDataFrame: A GeoDataFrame containing only the building geometries that intersect with 
-                    the bounding box of the input image.
+        GeoDataFrame: GeoDataFrame cropped to the image boundaries.
         """
-        bounding_boxes = [box(*img.rio.bounds()) for img in self.images]
-        union_bounding_box = unary_union(bounding_boxes)
+        
+        
+        bounding_box = box(*image.rio.bounds())
+        union_bounding_box = unary_union(bounding_box)
 
-        return buildings[buildings.intersects(union_bounding_box)]
+        return self.labels[self.labels.intersects(union_bounding_box)]
     
 
     def write_da_to_raster(self, data, name, directory):
         """Write data array to raster file in tiff format."""
         data_path = directory / name
         data.rio.to_raster(data_path)
-        print(f"Wrote {name} to {directory}.")
+        print(f"Wrote {name} to {directory}")
 
 
-    def generate_mask(self, image, write=False):
+    def generate_mask(self, image, labels, write=False):
         """
         Generate a binary mask from a vector file (shp or geojson).
 
@@ -199,22 +195,21 @@ class DataTiler(BaseClass):
                 raise TypeError("Invalid geometry type")
             
         # Generate data array
-        def create_data_array(data, crs, transform, image):
+        def create_data_array(data, transform, image):
             data_da = xr.DataArray(data, dims=["y", "x"], coords={'x': image.coords['x'], 'y':image.coords['y']})
-            data_da.rio.write_crs(crs, inplace=True)
-            data_da.rio.write_transform(transform, inplace=True)
+            data_da = data_da.rio.write_crs(self.crs)
+            data_da = data_da.rio.write_transform(transform)
 
             return data_da
         
         image_size = (image.shape[1], image.shape[2])
         transform = image.rio.transform()
-        crs = self.crs or image.rio.crs
         spatial_resolution = (transform[1] - transform[4]) / 2
 
-        if self.erosion:
-            self.labels['geometry'] = self.labels['geometry'].buffer(-spatial_resolution * 1) # removing 1 pixel
+        # if self.tiling_params["erosion"]:
+        #     labels['geometry'] = labels['geometry'].buffer(-spatial_resolution * 1) # removing 1 pixel
 
-        label_polygons = sum(self.labels['geometry'].apply(poly_from_utm, args=(transform,)), []) # converting all to lists of polygons, then concatenating.
+        label_polygons = sum(labels['geometry'].apply(poly_from_utm, args=(transform,)), []) # converting all to lists of polygons, then concatenating.
         mask = np.full(image_size, 0, dtype=np.uint8)
         weights = np.full(image_size, 0, dtype=np.uint8)
 
@@ -224,7 +219,11 @@ class DataTiler(BaseClass):
                              default_value=255, 
                              dtype="uint8")
             
-            if self.distance_weighting:
+            if self.tiling_params["erosion"]:
+                kernel = np.ones((3, 3), np.uint8)
+                mask = erode(mask, kernel, iterations=1)
+            
+            if self.tiling_params["distance_weighting"]:
                 edge_polygons = [poly.boundary for poly in label_polygons]
                 weights = rasterize(shapes=edge_polygons, 
                                 out_shape=image_size,
@@ -232,27 +231,27 @@ class DataTiler(BaseClass):
                                 dtype="uint8")
                 weights = gaussian_filter(weights, sigma=0.5) * 200
 
-        mask_da = create_data_array(mask, crs, transform, image)
-        weights_da = create_data_array(weights, crs, transform, image)
+        mask_da = create_data_array(mask, transform, image)
+        weights_da = create_data_array(weights, transform, image)
 
         if write:
             tmp_dir = BaseClass.create_if_not_exists(self.root_dir / "tmp", overwrite=True)
             self.write_da_to_raster(mask_da, f"{image.name}_mask.tif", tmp_dir)
-            if self.distance_weighting:
+            if self.tiling_params["distance_weighting"]:
                 self.write_da_to_raster(weights_da, f"{image.name}_edges.tif", tmp_dir)
         
         return mask_da, weights_da
     
-    def save_tile_shapefile(self, tile_geom, shp_name):
+    def save_tile_shapefile(self, labels, tile_geom, shp_name):
         "Save a clipped version of self.labels containing only the polygons of a given tile."
-        clipped_labels = gpd.clip(self.labels, tile_geom)
+        clipped_labels = gpd.clip(labels, tile_geom)
         clipped_labels = clipped_labels[clipped_labels.geometry.type == 'Polygon']
         # Save clipped labels as a shapefile
         clipped_labels_path = self.label_tiles_dir / shp_name
         clipped_labels.to_file(clipped_labels_path)
 
     
-    def generate_tiles(self, tile_size, write_tmp_files=False):
+    def generate_tiles(self, tile_size=0, write_tmp_files=False):
         """
         This method tiles both images and masks (if any) and stores them as .tif files.
 
@@ -265,12 +264,30 @@ class DataTiler(BaseClass):
         
         """
 
-        for image in self.images:
-            print(f"Tiling image {image.name}...")
+        if tile_size == 0:
+            tile_size = self.tiling_params["tile_size"]
+
+        for idx, image in enumerate(self.images_generator):
+            print(f"Tiling image {image.name}.. ({idx+1}/{self.n_images})")
             # Load image and corresponding mask as numpy array and retrieve their shape
 
-            if self.labels is not None:
-                mask, weights = self.generate_mask(image, write_tmp_files)
+            # Fix CRS with first image.
+            print("Reprojecting..")
+            if self.crs is None:
+                self.crs = image.rio.crs
+                if self.labels.crs != self.crs:
+                    self.labels = self.labels.to_crs(self.crs)
+            elif image.rio.crs != self.crs:
+                image.rio.reproject(self.crs)
+
+            # Prepare labels for training.
+            if self.labels is not None: 
+                labels = self.crop_labels(image)
+                if not labels.empty:
+                    mask, weights = self.generate_mask(image, labels, write_tmp_files)
+                else:
+                     print(f"No intersecting labels found for {image.name}. Skipping image.")
+                     continue
 
             x_tiles = image.sizes['x'] // tile_size
             y_tiles = image.sizes['y'] // tile_size
@@ -293,9 +310,10 @@ class DataTiler(BaseClass):
                         msk_tile = mask.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
                         self.write_da_to_raster(msk_tile, tile_name, self.mask_tiles_dir)
 
-                        if self.distance_weighting:
+                        if self.tiling_params["distance_weighting"]:
                             weights_tile = weights.isel(x=slice(i*tile_size, (i+1)*tile_size), y=slice(j*tile_size, (j+1)*tile_size))
                             self.write_da_to_raster(weights_tile, tile_name, self.weight_tiles_dir)
 
                         # Save labels in the appropriate folder.
-                        self.save_tile_shapefile(tile_geom, tile_name)
+                        if self.tiling_params["create_tile_shp"]:
+                            self.save_tile_shapefile(labels, tile_geom, tile_name)

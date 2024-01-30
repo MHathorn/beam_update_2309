@@ -1,10 +1,12 @@
 import shutil
-import pytest
-from preprocess.data_tiler import DataTiler
-import geopandas as gpd
-from pathlib import Path
-import rasterio
 import time
+from pathlib import Path
+
+import geopandas as gpd
+import pytest
+import rasterio
+from preprocess.data_tiler import DataTiler
+
 
 class Test_DataTiler:
     
@@ -14,38 +16,28 @@ class Test_DataTiler:
                                            "satellite_training", 
                                            "satellite_inference"])
     def name(self, request):
-            return request.param
+        return request.param
 
     @pytest.fixture
     def data_tiler(self, name, tmp_path_factory):
 
-        config = {
-            "dirs": {
-                "tiles": "tiles",
-                "image_tiles": "tiles/images",
-                "images": "images",
-                "labels": "labels",
-                "mask_tiles": "tiles/masks",
-            },
-        }
         tmp_path = tmp_path_factory.mktemp("data_tiler_test")
         input_path = Path("beam_model_training/tests") / name.split('_')[0]
         dir = tmp_path / name
-        config["root_dir"] = dir
-        
+        config = {"root_dir": dir}
         
         dir.mkdir(parents=True, exist_ok=True)
-        (dir / config["dirs"]["labels"]).mkdir(parents=True, exist_ok=True)
+        (dir / DataTiler.DIR_STRUCTURE["labels"]).mkdir(parents=True, exist_ok=True)
         # Copy labels expect for inference tests
         if not name.endswith('inference'):
-            for file in (input_path / config["dirs"]["labels"]).iterdir():
-                shutil.copy2(file, dir / config["dirs"]["labels"])
+            for file in (input_path / DataTiler.DIR_STRUCTURE["labels"]).iterdir():
+                shutil.copy2(file, dir / DataTiler.DIR_STRUCTURE["labels"])
 
-        (dir / config["dirs"]["images"]).mkdir(parents=True, exist_ok=True)
-        image_files = list((input_path / config["dirs"]["images"]).iterdir())
+        (dir / DataTiler.DIR_STRUCTURE["images"]).mkdir(parents=True, exist_ok=True)
+        image_files = list((input_path / DataTiler.DIR_STRUCTURE["images"]).iterdir())
         copy_count = 1 if name.endswith('single') else len(image_files)
         for file in image_files[:copy_count]:
-                shutil.copy2(file, dir / config["dirs"]["images"])
+                shutil.copy2(file, dir / DataTiler.DIR_STRUCTURE["images"])
         try:
             yield DataTiler(config)
         finally:

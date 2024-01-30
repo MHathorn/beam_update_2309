@@ -59,7 +59,7 @@ class MapGenerator(BaseClass):
         super().__init__(config, read_dirs=read_dirs, write_dirs=write_dirs)
         model_path = super().load_model_path(config)
         self.model = load_learner(model_path)
-        self.erosion = config["erosion"]
+        self.erosion = config["tiling"]["erosion"]
     
     def _create_shp_from_mask(self, file, mask_array):
         """

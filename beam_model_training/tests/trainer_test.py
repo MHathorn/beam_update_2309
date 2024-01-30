@@ -51,7 +51,7 @@ class TestTrainer:
         tiles_path = config["root_dir"] / Trainer.DIR_STRUCTURE["image_tiles"]
         if not tiles_path.exists():
             data_tiler = DataTiler(config)
-            data_tiler.generate_tiles(config["tile_size"])
+            data_tiler.generate_tiles(config["tiling"]["tile_size"])
             gen_train_test(config["root_dir"], test_size=config["test_size"])
         try:
             yield Trainer(config)
@@ -81,7 +81,7 @@ class TestTrainer:
         image_path = next(trainer.images_dir.iterdir())
         mask = trainer._get_mask(image_path, pixel_to_class)
         assert isinstance(mask, PILMask)
-        assert mask.size == (config["tile_size"], config["tile_size"])
+        assert mask.size == (config["tiling"]["tile_size"], config["tiling"]["tile_size"])
 
     def test_run(self, trainer):
         with patch('segmentation.train.get_segmentation_learner') as MockGetSegmentationLearner, \
