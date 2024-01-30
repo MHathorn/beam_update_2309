@@ -35,6 +35,33 @@ class CrossCombinedLoss:
     def activation(self, x):
         return F.softmax(x, dim=self.axis)
 
+class WeightedCrossCombinedLoss:
+    """
+    Modified cross-entropy to include distance weights for each sample.
+    This loss is proposed in this paper: 
+    """
+
+    def __init__(self, smooth=1., alpha=1., axis=1):
+        store_attr()
+        self.cross_entropy_loss = CrossEntropyLossFlat(axis=axis, reduction='none')
+        self.dice_loss = DiceLoss(axis, smooth)
+
+    def __call__(self, pred, targ):
+        print("pred:", pred.shape)
+        print("targ:", targ.shape)
+        print("targ[0], targ[1]:", targ[0].shape, targ[1].shape)
+        targ, weights = targ[0], targ[1]
+        ce_loss = self.cross_entropy_loss(pred, targ)
+        weighted_ce_loss = (ce_loss * weights).mean() 
+
+        return weighted_ce_loss + self.alpha * self.dice_loss(pred, targ)
+
+    def decodes(self, x):
+        return x.argmax(dim=self.axis)
+
+    def activation(self, x):
+        return F.softmax(x, dim=self.axis)
+
 
 
 class DualFocalLoss(nn.Module):

@@ -13,11 +13,13 @@ class BaseClass:
         "models": "models",
         "train_images": "tiles/train/images",
         "train_masks": "tiles/train/masks",
+        "train_weights": "tiles/train/weights",
         "eval": "eval",
         "predictions": "predict/masks",
         "shapefiles": "predict/shapefiles",
         "test_images": "tiles/test/images",
-        "test_masks": "tiles/test/masks"
+        "test_masks": "tiles/test/masks",
+        "test_weights": "tiles/test/weights"
     }
 
     def __init__(self, config, read_dirs=[], write_dirs=[]):

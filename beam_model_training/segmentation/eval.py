@@ -45,7 +45,7 @@ class Evaluator(BaseClass):
 
         self.config = config
         self.model_version = config["test"]["model_version"]
-        self.generate_preds = False
+        self.generate_preds = True
         read_dirs = ["test_images", "test_masks", "models", "eval"]
         write_dirs = []
         if self.generate_preds:
@@ -200,6 +200,6 @@ class Evaluator(BaseClass):
         df.to_csv(output_file_path, index=False)
 
 if __name__ == "__main__":
-    config = load_config("HRNet_config.yaml")
+    config = load_config("UNet_config.yaml")
     evaluator = Evaluator(config)
     evaluator.evaluate(n_images=10)

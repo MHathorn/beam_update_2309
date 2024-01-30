@@ -1,16 +1,15 @@
 import random
 
 import numpy as np
+from preprocess.transform import AddWeightsToTargets
 import rioxarray as rxr
 from utils.base_class import BaseClass
 import xarray as xr
 from fastai.vision.all import *
 from fastai.callback.tensorboard import TensorBoardCallback
 from semtorch import get_segmentation_learner
-from segmentation.losses import CombinedLoss, DualFocalLoss, CrossCombinedLoss
+from segmentation.losses import CombinedLoss, DualFocalLoss, CrossCombinedLoss, WeightedCrossCombinedLoss
 from utils.helpers import get_tile_size, load_config, seed, timestamp
-
-# Set path of root folder of images and masks
 
 
 class Trainer(BaseClass):
@@ -34,14 +33,15 @@ class Trainer(BaseClass):
                     - batch_size (int): Batch size for training.
         """
 
-        # Load dirs and create if needed
-        training_dirs = ["models", "train_images", "train_masks"]
-        super().__init__(config, read_dirs=training_dirs)
-
-        
         # Load and initialize random seed
         self.load_params(config)
         seed(self.params["seed"])
+
+        # Load dirs and create if needed
+        training_dirs = ["models", "train_images", "train_masks"]
+        if self.params["distance_weighting"]:
+            training_dirs.append("train_weights")
+        super().__init__(config, read_dirs=training_dirs)
 
         # Load learning arguments
         self.load_train_params(config)
@@ -56,8 +56,10 @@ class Trainer(BaseClass):
             KeyError: If a necessary key is missing from the config dictionary.
         """
         params_keys = ["seed", "codes", "test_size", "root_dir"]
+        tile_params_keys = ["distance_weighting", "erosion"]
         try:
             self.params = dict((k, config[k]) for k in params_keys)
+            self.params.update(dict((k, config["tiling"][k]) for k in tile_params_keys))
         except KeyError as e:
             raise KeyError(f"Config must have a value for {e} to run the Trainer.")
 
@@ -110,10 +112,18 @@ class Trainer(BaseClass):
         # new structure: 
         mask_path = str(image_path).replace("images", "masks")
         mask = rxr.open_rasterio(mask_path)
-        
+
         for i, val in enumerate(pixel_to_class):
             mask = xr.where(mask == pixel_to_class[i], val, mask)
         mask = mask.values.reshape((mask.shape[1], mask.shape[2]))
+        mask = PILMask.create(mask)
+
+        
+        if self.params["distance_weighting"]:
+            weights_path = str(image_path).replace("images", "weights")
+            weights = PILMask.create(weights_path)
+            return torch.stack([tensor(mask), tensor(weights).squeeze(0)], dim=0)
+
         
         return PILMask.create(mask)
 
@@ -229,6 +239,10 @@ class Trainer(BaseClass):
                 Hue(max_hue=0.2),
                 Saturation(max_lighting=0.5)]
         
+        if self.params["distance_weighting"]:
+            # tfms.append(AddWeightsToTargets(weights_dir=self.train_weights_dir))
+            self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
+        
         image_files = get_image_files(self.train_images_dir)
         assert len(image_files) > 0, f"The images directory {self.train_images_dir} does not contain any valid images."
         self.train_params["tile_size"] = get_tile_size(image_files[0])
@@ -253,7 +267,7 @@ class Trainer(BaseClass):
                                             backbone_name=self.train_params["backbone"], model_dir=self.models_dir, metrics=[Dice()]).to_fp16()
         elif self.train_params["architecture"].lower() == 'u-net':
             loss_functions = {'Dual_Focal_loss': DualFocalLoss(), 'CombinedLoss': CombinedLoss(),
-                            'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None, 'CrossCombinedLoss': CrossCombinedLoss()}
+                            'DiceLoss': DiceLoss(), 'FocalLoss': FocalLoss(), None: None, 'CrossCombinedLoss': CrossCombinedLoss(), 'WeightedCrossCombinedLoss': WeightedCrossCombinedLoss()}
             backbones = {'resnet18': resnet18, 'resnet34': resnet34, 'resnet50': resnet50,
                         'resnet101': resnet101, 'vgg16_bn': vgg16_bn}
             self.learner = unet_learner(dls, backbones.get(self.train_params["backbone"]), n_out=2, loss_func=loss_functions.get(self.train_params["loss_function"]), metrics=[Dice(), JaccardCoeff()])

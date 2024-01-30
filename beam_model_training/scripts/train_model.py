@@ -20,7 +20,7 @@ def main(config_file):
     trainer = Trainer(config)
     trainer.run()
 
-    config["test"]["model_name"] = trainer.model_name
+    config["test"]["model_version"] = trainer.model_name
     evaluator = Evaluator(config)
     evaluator.evaluate(n_images=0)
 
