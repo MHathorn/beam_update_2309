@@ -4,13 +4,16 @@
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
 # DATA SETTINGS
-erosion: true
-root_dir: F:/SanJose_labeling
+tiling:
+  distance_weighting: true
+  create_tile_shp: false
+  erosion: true
+  tile_size: 512
+root_dir: F:/SanJose_labeling2
 seed: 2022
 test:
   model_version: U-Net_20241117-1410
 test_size: 0.2
-tile_size: 128
 # MODEL SETTINGS
 train:
   architecture: U-Net

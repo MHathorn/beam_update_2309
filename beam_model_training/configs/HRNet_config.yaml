@@ -4,17 +4,20 @@
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
 # DATA SETTINGS
-erosion: true
-root_dir: F:/SanSalvador_model
+tiling:
+  distance_weighting: false
+  create_tile_shp: false
+  erosion: true
+  tile_size: 512
+root_dir: F:/dev_versions/SanJose_model
 seed: 2022
 test:
-  model_version: U-Net_20241117-1410
+  model_version: HRNet_20240130-1021
 test_size: 0.2
-tile_size: 256
 # MODEL SETTINGS
 train:
   architecture: HRNet
-  backbone: hrnet_w18
+  backbone: hrnet_w30
   epochs: 300
   loss_function: None
 training: true

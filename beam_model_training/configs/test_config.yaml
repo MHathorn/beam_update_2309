@@ -4,13 +4,16 @@
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
 # DATA SETTINGS
-erosion: true
+tiling:
+  distance_weighting: true
+  create_tile_shp: false
+  erosion: true
+  tile_size: 256
 root_dir: C:\Users\adm.nkiner\Documents\BEAM\app\beam_update_2309\beam_model_training\tests\satellite
 seed: 2022
 test:
   model_version: U-Net_20240118-1657
 test_size: 0.2
-tile_size: 256
 # MODEL SETTINGS
 train:
   architecture: U-Net
