@@ -5,11 +5,11 @@ import logging
 
 import cv2
 import geopandas as gpd
+import pandas as pd
 import numpy as np
 from PIL import Image
 import rasterio
 from rasterio.features import geometry_mask
-import rioxarray as rxr
 import torch
 import xarray as xr
 from fastai.vision.all import load_learner
@@ -71,39 +71,28 @@ class MapGenerator(BaseClass):
     
     def _create_shp_from_mask(self, mask_da):
         """
-        Creates a shapefile from a binary mask array and saves it to disk.         
+        Creates a GeoDataFrame from a binary mask array.
         The function first dilates the mask with a 3x3 square kernel, which
         is the inverse of the erosion applied in preprocessing. Then, it uses the `rasterio.features.shapes` function to
-        extract the shapes of the connected regions of the mask. Finally, it saves the shapes as polygons in a shapefile
-        with the same name as the original image file, suffixed with "_predicted.shp".
+        extract the shapes of the connected regions of the mask.
 
         Parameters
         ----------
             mask_array : numpy.ndarray
                 Binary mask array of the same size as the original image.
+        Returns
+        -------
+            gdf: geopandas.GeoDataFrame
+                GeoDataFrame representing the shapes extracted from the mask.
         """
 
         if not isinstance(mask_da, xr.DataArray) or mask_da.name is None:
             raise TypeError("mask_array must be a named DataArray.")
-        
-        pred_name = mask_da.name
-        shp_path = self.shapefiles_dir / f"{pred_name}_predicted.shp"
-        
-        if mask_da is None or len(mask_da.values) == 1:
-            
-            empty_schema = {"geometry": "Polygon", "properties": {"id": "int"}}
-            no_crs = None
-            gdf = gpd.GeoDataFrame(geometry=[])
-            
-            gdf.to_file(
-                shp_path,
-                driver="ESRI Shapefile",
-                schema=empty_schema,
-                crs=no_crs,
-            )
-        
 
-        if not hasattr(mask_da.rio, 'crs'):
+        if mask_da is None or len(mask_da.values) == 1:
+            return gpd.GeoDataFrame(geometry=[])
+
+        if mask_da.rio.crs is None:
             raise ValueError("mask_array does not have a CRS attached.")
 
         # Dilate the mask with a 3x3 square kernel. This is the inverse of the erosion applied in preprocessing
@@ -117,26 +106,18 @@ class MapGenerator(BaseClass):
             Polygon(shape[0]["coordinates"][0]) for shape in shapes
         ]
         gdf = gpd.GeoDataFrame(crs=mask_da.rio.crs, geometry=polygons)
-        gdf["area"] = gdf["geometry"].area
-        max_area_idx = gdf["area"].idxmax()
+        gdf["objectid"] = mask_da.name
+        gdf["building_area"] = gdf["geometry"].area
+        max_area_idx = gdf["building_area"].idxmax()
         gdf = gdf.drop([max_area_idx])
         # Drop shapes that are too small or too large to be a building
-        gdf = gdf[(gdf["area"] > 2) & (gdf["area"] < 500000)]
+        gdf = gdf[(gdf["building_area"] > 2) & (gdf["building_area"] < 500000)]
         # in case the geo-dataframe is empty which means no settlements are detected
         if gdf.empty:
-            empty_schema = {"geometry": "Polygon", "properties": {"id": "int"}}
-            no_crs = None
-            gdf = gpd.GeoDataFrame(geometry=[])
-            gdf.to_file(
-                shp_path,
-                driver="ESRI Shapefile",
-                schema=empty_schema,
-                crs=no_crs,
-            )
-        else:
-            gdf.to_file(
-                shp_path, driver="ESRI Shapefile"
-            )
+            return gpd.GeoDataFrame(geometry=[])
+
+        return gdf
+
     
     def group_tiles_by_settlement(self, mask_tiles, settlements):
         """
@@ -195,7 +176,7 @@ class MapGenerator(BaseClass):
 
             output = np.zeros_like(output) if output_min == output_max else (output - output_min) / (output_max - output_min)
 
-        inference_path = self.predictions_dir / (image_file.stem +'_inference.tif')
+        inference_path = self.predictions_dir / f"{image_file.stem}_inference.tif"
 
         # Create a DataArray from the output and assign the coordinate reference system and affine transform from original tile
         output_da = xr.DataArray(
@@ -213,7 +194,12 @@ class MapGenerator(BaseClass):
 
         # Generate shapefile
         if write_shp:
-            self._create_shp_from_mask(output_da)
+            shp_path = self.shapefiles_dir / f"{image_file.stem}_predicted.shp"
+            vector_df = self._create_shp_from_mask(output_da)
+            vector_df.to_file(
+                shp_path,
+                driver="ESRI Shapefile",
+            )
         return output_da
 
 
@@ -262,6 +248,7 @@ class MapGenerator(BaseClass):
 
         if merge_outputs:
             grouped_tiles = self.group_tiles_by_settlement(output_files, AOI_gpd)
+            gdfs = []
             for (objectid, geometry), names in grouped_tiles.items():
                 # Filter the data arrays by name in output_files
                 settlement_tiles = [da for da in output_files if da.name in names]
@@ -273,8 +260,16 @@ class MapGenerator(BaseClass):
 
                 # Apply the mask to the data array
                 combined = combined.where(mask, other=0)
-                self._create_shp_from_mask(combined)
-            logging.info('Output merged and saved to disk.')
+                gdf = self._create_shp_from_mask(combined)
+                gdfs.append(gdf)
+            all_buildings = pd.concat(gdfs)
+            settlement_buildings = all_buildings.merge(AOI_gpd, on='objectid')
+            shapefile_path = self.shapefiles_dir / "settlement_buildings.shp"
+            settlement_buildings.to_file(
+                shapefile_path,
+                driver="ESRI Shapefile"
+            )
+            logging.info('Output merged, joined with settlements data, and saved to disk.')
 
         logging.info('Tile inference process completed.')
 
