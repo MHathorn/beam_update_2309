@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytz
 import rioxarray as rxr
+import xarray as xr
 import yaml
 from fastai.vision.all import set_seed, torch, PILImage
 
@@ -66,9 +67,10 @@ def crs_to_pixel_coords(x, y, transform):
     return int(px), int(py)
 
 
-def get_rgb_channels(tiff_file_path):
+
+def get_rgb_channels(input_data):
     """
-    Get RGB channels from varying format TIFF files.
+    Get RGB channels from varying format TIFF files or directly from a DataArray.
 
     Reads a TIFF file using rioxarray and converts it to an RGB image.
     It supports RGBA images and Worldview-3 multi-band satellite images. For RGBA images, 
@@ -76,7 +78,8 @@ def get_rgb_channels(tiff_file_path):
     bands for red (4), green (2), and blue (1) are selected.
 
     Parameters:
-    tiff_file_path (str): The path of the TIFF file to be converted.
+    input_data (str, pathlib.Path, or xarray.DataArray): The the TIFF file (or path thereof) to be converted
+        or a pre-loaded DataArray.
 
     Returns:
     xarray.DataArray: The resulting RGB image.
@@ -86,13 +89,22 @@ def get_rgb_channels(tiff_file_path):
     ValueError: If the number of bands in the image is unexpected.
     """
 
-    if not tiff_file_path.suffix.lower() in ('.tif', '.tiff'):
-        raise IOError(f"Expecting tiff file format for conversion ({tiff_file_path.name}).")
+    if isinstance(input_data, (str, Path)):
+        tiff_file_path = Path(input_data)
+        if not tiff_file_path.suffix.lower() in ('.tif', '.tiff'):
+            raise IOError(f"Expecting tiff file format for conversion ({tiff_file_path.name}).")
+        
+        riox_img = rxr.open_rasterio(tiff_file_path)
+    elif isinstance(input_data, xr.DataArray):
+        riox_img = input_data
+    else:
+        raise ValueError("Input data must be a string, pathlib.Path, or xarray.DataArray.")
     
-    riox_img = rxr.open_rasterio(tiff_file_path)
     num_bands = riox_img.shape[0]
 
-    if num_bands == 4:  # RGBA image
+    if num_bands == 3: # already RGB
+        rgb_image = riox_img
+    elif num_bands == 4: # RGBA image
         rgb_image = riox_img.sel(band=[1, 2, 3])
     elif num_bands == 8:  # Worlview-3 satellite image
         # Select bands for red (4), green (2), and blue (1)
@@ -101,6 +113,7 @@ def get_rgb_channels(tiff_file_path):
         raise ValueError("Unexpected number of bands.")
 
     return rgb_image
+
 
 def multiband_to_png(file_path, output_dir):
     tiff_file = Path(file_path)
