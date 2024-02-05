@@ -1,24 +1,29 @@
 
+import logging
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-import logging
 
 import cv2
 import geopandas as gpd
-import pandas as pd
 import numpy as np
-from PIL import Image
+import pandas as pd
 import rasterio
-from rasterio.features import geometry_mask
+from rasterio.transform import from_origin
+import rioxarray as rxr
+from rioxarray.merge import merge_arrays
 import torch
 import xarray as xr
 from fastai.vision.all import load_learner
+from PIL import Image
+from shapely import vectorized
 from shapely.geometry import Polygon, box
 
 from preprocess.sample import tile_in_settlement
 from segmentation.train import Trainer
 from utils.base_class import BaseClass
 from utils.helpers import get_rgb_channels, load_config
+
+logging.basicConfig(level=logging.INFO)
 
 
 class MapGenerator(BaseClass):
@@ -53,7 +58,7 @@ class MapGenerator(BaseClass):
     create_tile_inferences():
         Performs inference on each tile in the images directory and saves the results.
     """
-    def __init__(self, config):
+    def __init__(self, config, overwrite=False):
         """
         Constructs all the necessary attributes for the MapGenerator object.
 
@@ -63,13 +68,26 @@ class MapGenerator(BaseClass):
                 Configuration dictionary containing paths and inference arguments.
         """
         read_dirs = ["test_images", "models"]
-        write_dirs = ["predictions", "shapefiles"]
-        super().__init__(config, read_dirs=read_dirs, write_dirs=write_dirs)
+        prediction_dirs = ["predictions", "shapefiles"]
+        if overwrite:
+            super().__init__(config, read_dirs=read_dirs, write_dirs=prediction_dirs)
+        else:
+            super().__init__(config, read_dirs=(read_dirs + prediction_dirs))
         model_path = super().load_model_path(config)
         self.model = load_learner(model_path)
+        self.crs = self.get_crs(self.test_images_dir)
         self.erosion = config["tiling"]["erosion"]
     
-    def _create_shp_from_mask(self, mask_da):
+
+    def get_crs(self, images_dir):
+        images_dir_path = Path(images_dir)
+        if any(images_dir_path.iterdir()):
+            # Get the first image file
+            img_file = next(images_dir_path.glob('*'))  # Adjust the pattern as needed
+            img = rxr.open_rasterio(img_file)
+            return img.rio.crs
+
+    def _create_shp_from_mask(self, mask_da, primary_key='shape_id'):
         """
         Creates a GeoDataFrame from a binary mask array.
         The function first dilates the mask with a 3x3 square kernel, which
@@ -89,7 +107,7 @@ class MapGenerator(BaseClass):
         if not isinstance(mask_da, xr.DataArray) or mask_da.name is None:
             raise TypeError("mask_array must be a named DataArray.")
 
-        if mask_da is None or len(mask_da.values) == 1:
+        if mask_da is None or mask_da.values.max() == 0:
             return gpd.GeoDataFrame(geometry=[])
 
         if mask_da.rio.crs is None:
@@ -99,19 +117,18 @@ class MapGenerator(BaseClass):
         if self.erosion:
             kernel = np.ones((3, 3), np.uint8)
             if len(mask_da.values.shape) > 2:
-                mask_da.values = mask_da.values[0, :, :]
+                mask_da = mask_da.squeeze(dim=None)
             mask_da.values = cv2.dilate(mask_da.values, kernel, iterations=1)
         shapes = rasterio.features.shapes(mask_da.values, transform=mask_da.rio.transform())
-        polygons = [
-            Polygon(shape[0]["coordinates"][0]) for shape in shapes
-        ]
-        gdf = gpd.GeoDataFrame(crs=mask_da.rio.crs, geometry=polygons)
-        gdf["objectid"] = mask_da.name
-        gdf["building_area"] = gdf["geometry"].area
-        max_area_idx = gdf["building_area"].idxmax()
+        polygons = [Polygon(shape[0]["coordinates"][0]) for shape in shapes]
+
+        gdf = gpd.GeoDataFrame(crs=self.crs, geometry=polygons)
+        gdf[primary_key] = mask_da.name
+        gdf["bldg_area"] = gdf["geometry"].area
+        max_area_idx = gdf["bldg_area"].idxmax()
         gdf = gdf.drop([max_area_idx])
         # Drop shapes that are too small or too large to be a building
-        gdf = gdf[(gdf["building_area"] > 2) & (gdf["building_area"] < 500000)]
+        gdf = gdf[(gdf["bldg_area"] > 2) & (gdf["bldg_area"] < 500000)]
         # in case the geo-dataframe is empty which means no settlements are detected
         if gdf.empty:
             return gpd.GeoDataFrame(geometry=[])
@@ -119,7 +136,7 @@ class MapGenerator(BaseClass):
         return gdf
 
     
-    def group_tiles_by_settlement(self, mask_tiles, settlements):
+    def group_tiles_by_settlement(self, mask_tiles, settlements, primary_key):
         """
         Groups tiles by their corresponding settlement based on geographic coordinates.
 
@@ -135,16 +152,12 @@ class MapGenerator(BaseClass):
             The index of the series are tuples containing the OBJECTID and geometry of the settlement.
 
         """
-    
-        crs = mask_tiles[0].rio.crs
         data = [{'name': da.name, 'geometry': box(*da.rio.bounds())} for da in mask_tiles]
 
         # Create a GeoDataFrame from the list of dictionaries
-        gdf = gpd.GeoDataFrame(data, crs=crs)
-        if settlements.crs != crs:
-            settlements = settlements.to_crs(crs)
+        gdf = gpd.GeoDataFrame(data, crs=self.crs)
         joined = gpd.sjoin(settlements, gdf, how="inner", op='intersects')
-        grouped_tiles = joined.groupby(['OBJECTID', 'geometry'])['name'].apply(list)
+        grouped_tiles = joined.groupby([primary_key, 'geometry'])['name'].apply(list)
     
         return grouped_tiles
     
@@ -188,7 +201,7 @@ class MapGenerator(BaseClass):
                 "x": tile.coords["x"]
             }
         )
-        output_da = output_da.rio.write_crs(tile.rio.crs)
+        output_da = output_da.rio.write_crs(self.crs)
         output_da = output_da.rio.write_transform(tile.rio.transform())
         output_da.rio.to_raster(inference_path)
 
@@ -201,9 +214,56 @@ class MapGenerator(BaseClass):
                 driver="ESRI Shapefile",
             )
         return output_da
+    
+    def filter_by_areas(self, output_files, settlements, primary_key):
+        """
+        Filters geospatial data arrays by settlement areas and merges them into a single GeoDataFrame.
+
+        Groups and merges tiles based on settlement boundaries, applies a mask to retain data 
+        within these boundaries, and enriches the resulting GeoDataFrame with attributes from `settlements`.
+
+        Parameters:
+        - output_files (list of xarray.DataArray): Geospatial data arrays with a 'name' attribute.
+        - settlements (geopandas.GeoDataFrame): Settlement areas with geometries and attributes.
+        - primary_key (str): Column in `settlements` for unique settlement identification.
+
+        Returns:
+        - geopandas.GeoDataFrame: Merged and masked geospatial data for each settlement, enriched with 
+        settlement attributes.
+        """
+    
+        if settlements.crs != self.crs:
+            settlements = settlements.to_crs(self.crs)
+        grouped_tiles = self.group_tiles_by_settlement(output_files, settlements, primary_key)
+        gdfs = []
+        for (pkey, geometry), names in grouped_tiles.items():
+            # Filter the data arrays by name in output_files
+            settlement_tiles = [da for da in output_files if da.name in names]
+
+            combined = merge_arrays(settlement_tiles)
+            combined.name = pkey
 
 
-    def create_tile_inferences(self, images_dir=None, AOI_gpd=None, merge_outputs=False):
+            # Create a mask from the settlement's geometry
+            minx, miny, maxx, maxy = combined.rio.bounds()
+            # Correcting for flipped bounds in certain geometries
+            if maxy < miny:
+                miny, maxy = maxy, miny
+            if maxx < minx:
+                minx, maxx = maxx, minx
+            height, width = combined.shape[-2:]
+            y, x = np.mgrid[miny:maxy:height*1j, minx:maxx:width*1j]
+            mask = vectorized.contains(geometry, x, y)
+
+            # Apply the mask to the data array
+            combined = combined.where(mask, other=0)
+            gdf = self._create_shp_from_mask(combined, primary_key)
+            gdfs.append(gdf)
+        all_buildings = gpd.GeoDataFrame(pd.concat(gdfs), geometry='geometry', crs=self.crs)
+        return all_buildings.merge(settlements.drop('geometry', axis=1), on=primary_key)
+
+
+    def create_tile_inferences(self, images_dir=None, settlements=None, primary_key=''):
         """
         Performs inference on each tile in the images directory and optionally merges the results.
 
@@ -225,47 +285,39 @@ class MapGenerator(BaseClass):
         This function saves the inference results to disk. If merge_outputs is True, the results are grouped by settlement before being saved.
         """
 
-        images_dir = self.test_images_dir if images_dir is None else Path(images_dir)
-        image_files = list(images_dir.glob('*.tif')) + list(images_dir.glob('*.tiff'))
-
-        logging.info(f'Found {len(image_files)} image files in directory {images_dir}. ')
-        logging.info('Starting tile inferences...')
         
-        # output_files = []
-        # for image in image_files:
-        #     output_da = self.single_tile_inference(image, AOI_gpd, not merge_outputs)
-        #     output_files.append(output_da)
+
         
-        with ProcessPoolExecutor() as executor:
-            futures = [executor.submit(self.single_tile_inference, image_file, AOI_gpd, (not merge_outputs)) for image_file in image_files]
-            output_files = []
-            for future in futures:
-                result = future.result()
-                if result is not None:
-                    output_files.append(result)
+        
+        output_files = []
+        if any(self.predictions_dir.iterdir()):
+            preds = list(self.predictions_dir.iterdir())
+            logging.info(f'Found {len(preds)} predictions in directory {self.predictions_dir}. Loading.. ')
+            output_files = [rxr.open_rasterio(file) for file in preds]
+        else:
+            
+            logging.info('Starting tile inferences...')
+            images_dir = self.test_images_dir if images_dir is None else Path(images_dir)
+            image_files = list(images_dir.glob('*.tif')) + list(images_dir.glob('*.tiff'))
+            logging.info(f'Found {len(image_files)} image files in directory {images_dir}. ')
+            write_shp = True if settlements is None else False
+            for image in image_files:
+                output_da = self.single_tile_inference(image, settlements, write_shp)
+                output_files.append(output_da)
+        # with ProcessPoolExecutor() as executor:
+        #     futures = [executor.submit(self.single_tile_inference, image_file, settlements, (not merge_outputs)) for image_file in image_files]
+        #     for future in futures:
+        #         result = future.result()
+        #         if result is not None:
+        #             output_files.append(result)
 
-        logging.info(f'Inference completed for {len(output_files)} tiles.')
+            logging.info(f'Inference completed for {len(output_files)} tiles.')
 
-        if merge_outputs:
-            grouped_tiles = self.group_tiles_by_settlement(output_files, AOI_gpd)
-            gdfs = []
-            for (objectid, geometry), names in grouped_tiles.items():
-                # Filter the data arrays by name in output_files
-                settlement_tiles = [da for da in output_files if da.name in names]
-                combined=xr.DataArray(name=objectid)
-                for da in settlement_tiles:
-                    combined = combined.combine_first(da)
-                # Create a mask from the settlement's geometry
-                mask = geometry_mask([geometry], transform=combined.rio.transform(), out_shape=combined.shape[-2:], invert=True)
-
-                # Apply the mask to the data array
-                combined = combined.where(mask, other=0)
-                gdf = self._create_shp_from_mask(combined)
-                gdfs.append(gdf)
-            all_buildings = pd.concat(gdfs)
-            settlement_buildings = all_buildings.merge(AOI_gpd, on='objectid')
+        if settlements is not None:
+            buildings_gdf = self.filter_by_areas(output_files, settlements, primary_key)
+            
             shapefile_path = self.shapefiles_dir / "settlement_buildings.shp"
-            settlement_buildings.to_file(
+            buildings_gdf.to_file(
                 shapefile_path,
                 driver="ESRI Shapefile"
             )
