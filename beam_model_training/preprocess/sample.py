@@ -7,7 +7,6 @@ import rioxarray as rxr
 from shapely.geometry import box
 from utils.helpers import crs_to_pixel_coords
 
-from preprocess.data_tiler import DataTiler
 
 
 def load_tile_info(tile_path):
@@ -22,7 +21,7 @@ def tile_in_settlement(tile, settlements):
     
     # Ensure both geometries are in the same CRS
     if tile.rio.crs != settlements.crs:
-        tile = tile.rio.reproject(settlements.crs)
+        settlements = settlements.to_crs(tile.rio.crs)
         
     tile_geom = box(*tile.rio.bounds())
     return any(settlements.intersects(tile_geom))

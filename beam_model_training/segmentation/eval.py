@@ -200,6 +200,6 @@ class Evaluator(BaseClass):
         df.to_csv(output_file_path, index=False)
 
 if __name__ == "__main__":
-    config = load_config("UNet_config.yaml")
+    config = load_config("HRNet_config.yaml")
     evaluator = Evaluator(config)
     evaluator.evaluate(n_images=10)

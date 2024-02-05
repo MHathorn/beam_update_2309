@@ -109,6 +109,8 @@ def get_rgb_channels(input_data):
     elif num_bands == 8:  # Worlview-3 satellite image
         # Select bands for red (4), green (2), and blue (1)
         rgb_image = riox_img.sel(band=[4, 2, 1])
+    elif num_bands == 1:
+        rgb_image = xr.concat([riox_img for _ in range(3)], dim='band')
     else:
         raise ValueError("Unexpected number of bands.")
 
