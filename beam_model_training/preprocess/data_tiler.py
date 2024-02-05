@@ -13,6 +13,8 @@ from shapely import wkt
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 from scipy.ndimage import gaussian_filter
+import logging
+from tqdm import tqdm
 
 from utils.base_class import BaseClass
 
@@ -170,7 +172,7 @@ class DataTiler(BaseClass):
         """Write data array to raster file in tiff format."""
         data_path = directory / name
         data.rio.to_raster(data_path)
-        print(f"Wrote {name} to {directory}")
+        logging.info(f"Wrote {name} to {directory}")
 
 
     def generate_mask(self, image, labels, write=False):
@@ -204,7 +206,6 @@ class DataTiler(BaseClass):
         
         image_size = (image.shape[1], image.shape[2])
         transform = image.rio.transform()
-        spatial_resolution = (transform[1] - transform[4]) / 2
 
         # if self.tiling_params["erosion"]:
         #     labels['geometry'] = labels['geometry'].buffer(-spatial_resolution * 1) # removing 1 pixel
@@ -272,7 +273,7 @@ class DataTiler(BaseClass):
             # Load image and corresponding mask as numpy array and retrieve their shape
 
             # Fix CRS with first image.
-            print("Reprojecting..")
+            print("Preparing inputs..")
             if self.crs is None:
                 self.crs = image.rio.crs
                 if self.labels.crs != self.crs:
@@ -297,6 +298,8 @@ class DataTiler(BaseClass):
                 raise IOError(f"tile_size is bigger than the input image for {image.name} ({image.sizes['x']}, {image.sizes['y']}). \
                               Please choose a smaller tile size or a different image.")
 
+            pbar = tqdm(total=total_tiles, desc=f"Tiling {image.name}", leave=True)
+
             # Cut image. mask and weights into tiles and store them as .tif-files
             for i in range(x_tiles):
                 for j in range(y_tiles):
@@ -317,3 +320,5 @@ class DataTiler(BaseClass):
                         # Save labels in the appropriate folder.
                         if self.tiling_params["create_tile_shp"]:
                             self.save_tile_shapefile(labels, tile_geom, tile_name)
+                    pbar.update(1)
+            pbar.close()
