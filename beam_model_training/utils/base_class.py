@@ -1,6 +1,7 @@
 from pathlib import Path
 import shutil
 
+
 class BaseClass:
 
     DIR_STRUCTURE = {
@@ -19,7 +20,7 @@ class BaseClass:
         "shapefiles": "predict/shapefiles",
         "test_images": "tiles/test/images",
         "test_masks": "tiles/test/masks",
-        "test_weights": "tiles/test/weights"
+        "test_weights": "tiles/test/weights",
     }
 
     def __init__(self, config, read_dirs=[], write_dirs=[]):
@@ -37,8 +38,12 @@ class BaseClass:
                 dir_path = path / self.DIR_STRUCTURE[dir_name]
             except KeyError as e:
                 raise KeyError(f"The directory key {e} is not registered in BaseClass.")
-            overwrite = (dir_name in write_dirs)
-            setattr(self, f"{dir_name}_dir", self.create_if_not_exists(dir_path, overwrite=overwrite))
+            overwrite = dir_name in write_dirs
+            setattr(
+                self,
+                f"{dir_name}_dir",
+                self.create_if_not_exists(dir_path, overwrite=overwrite),
+            )
 
     def load_model_path(self, config):
         model_version = config["test"]["model_version"]
@@ -46,14 +51,15 @@ class BaseClass:
         if not model_version_dir.exists():
             raise ValueError(f"Couldn't find model under {model_version_dir}.")
         # Find all pickle files in the directory
-        pickle_files = list(model_version_dir.glob('*.pkl'))
+        pickle_files = list(model_version_dir.glob("*.pkl"))
 
         # Check if there is exactly one pickle file
         if len(pickle_files) != 1:
-            raise ValueError(f"Expected exactly one pickle file in {model_version_dir}, but found {len(pickle_files)}.")
+            raise ValueError(
+                f"Expected exactly one pickle file in {model_version_dir}, but found {len(pickle_files)}."
+            )
 
         return pickle_files[0]
-        
 
     @staticmethod
     def create_if_not_exists(dir_path, overwrite=False):
@@ -71,8 +77,9 @@ class BaseClass:
         if not dir_path.exists():
             dir_path.mkdir(parents=True)
         elif overwrite and any(dir_path.iterdir()):
-            print(f"Warning: {dir_path.name} directory is not empty. Overwriting files.")
+            print(
+                f"Warning: {dir_path.name} directory is not empty. Overwriting files."
+            )
             shutil.rmtree(dir_path)  # Delete the directory and its contents
             dir_path.mkdir(parents=True)
         return dir_path
-

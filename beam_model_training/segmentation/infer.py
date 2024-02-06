@@ -1,4 +1,3 @@
-
 import logging
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -36,7 +35,7 @@ class MapGenerator(BaseClass):
     ----------
     config: dict
         - root_dir : str
-        The root directory containing all training files. 
+        The root directory containing all training files.
             - images : str
             The directory where the image tiles are stored.
             - shapefiles : str
@@ -58,6 +57,7 @@ class MapGenerator(BaseClass):
     create_tile_inferences():
         Performs inference on each tile in the images directory and saves the results.
     """
+
     def __init__(self, config, overwrite=False):
         """
         Constructs all the necessary attributes for the MapGenerator object.
@@ -77,17 +77,16 @@ class MapGenerator(BaseClass):
         self.model = load_learner(model_path)
         self.crs = self.get_crs(self.test_images_dir)
         self.erosion = config["tiling"]["erosion"]
-    
 
     def get_crs(self, images_dir):
         images_dir_path = Path(images_dir)
         if any(images_dir_path.iterdir()):
             # Get the first image file
-            img_file = next(images_dir_path.glob('*'))  # Adjust the pattern as needed
+            img_file = next(images_dir_path.glob("*"))  # Adjust the pattern as needed
             img = rxr.open_rasterio(img_file)
             return img.rio.crs
 
-    def _create_shp_from_mask(self, mask_da, primary_key='shape_id'):
+    def _create_shp_from_mask(self, mask_da, primary_key="shape_id"):
         """
         Creates a GeoDataFrame from a binary mask array.
         The function first dilates the mask with a 3x3 square kernel, which
@@ -119,7 +118,9 @@ class MapGenerator(BaseClass):
             if len(mask_da.values.shape) > 2:
                 mask_da = mask_da.squeeze(dim=None)
             mask_da.values = cv2.dilate(mask_da.values, kernel, iterations=1)
-        shapes = rasterio.features.shapes(mask_da.values, transform=mask_da.rio.transform())
+        shapes = rasterio.features.shapes(
+            mask_da.values, transform=mask_da.rio.transform()
+        )
         polygons = [Polygon(shape[0]["coordinates"][0]) for shape in shapes]
 
         gdf = gpd.GeoDataFrame(crs=self.crs, geometry=polygons)
@@ -135,33 +136,32 @@ class MapGenerator(BaseClass):
 
         return gdf
 
-    
     def group_tiles_by_settlement(self, mask_tiles, settlements, primary_key):
         """
         Groups tiles by their corresponding settlement based on geographic coordinates.
 
-    
+
         Parameters:
         - mask_tiles (list): List of Data Arrays representing the tiles to be potentially merged.
         - settlements (GeoDataFrame): A GeoDataFrame representing the settlements.
-    
+
         Returns
         -------
         grouped_tiles : pandas.Series
-            A series where each entry is a list of tile names that cover a unique settlement. 
+            A series where each entry is a list of tile names that cover a unique settlement.
             The index of the series are tuples containing the OBJECTID and geometry of the settlement.
 
         """
-        data = [{'name': da.name, 'geometry': box(*da.rio.bounds())} for da in mask_tiles]
+        data = [
+            {"name": da.name, "geometry": box(*da.rio.bounds())} for da in mask_tiles
+        ]
 
         # Create a GeoDataFrame from the list of dictionaries
         gdf = gpd.GeoDataFrame(data, crs=self.crs)
-        joined = gpd.sjoin(settlements, gdf, how="inner", op='intersects')
-        grouped_tiles = joined.groupby([primary_key, 'geometry'])['name'].apply(list)
-    
+        joined = gpd.sjoin(settlements, gdf, how="inner", op="intersects")
+        grouped_tiles = joined.groupby([primary_key, "geometry"])["name"].apply(list)
+
         return grouped_tiles
-    
-        
 
     def single_tile_inference(self, image_file, AOI_gpd=None, write_shp=True):
         """
@@ -171,23 +171,27 @@ class MapGenerator(BaseClass):
         - AOI_gpd (GeoDataFrame): Area of Interest as a GeoPandas DataFrame.
 
         This function opens the image file, checks if it is within the Area of Interest if exists,
-        runs inference on the image, normalizes the output, saves the output as a new 
+        runs inference on the image, normalizes the output, saves the output as a new
         GeoTIFF file, and generates a shapefile from the output mask.
         """
         tile = get_rgb_channels(image_file)
 
         if AOI_gpd is not None and not tile_in_settlement(tile, AOI_gpd):
-            output = np.zeros_like(tile.data.transpose(1, 2, 0)[:,:,0])
+            output = np.zeros_like(tile.data.transpose(1, 2, 0)[:, :, 0])
         else:
             # Run inference and save as grayscale image
             image = Image.fromarray(tile.data.transpose(1, 2, 0))
             pred, _, _ = self.model.predict(image)
-            output = torch.exp(pred[:, :]).detach().cpu().numpy() 
+            output = torch.exp(pred[:, :]).detach().cpu().numpy()
 
             output_min = output.min()
             output_max = output.max()
 
-            output = np.zeros_like(output) if output_min == output_max else (output - output_min) / (output_max - output_min)
+            output = (
+                np.zeros_like(output)
+                if output_min == output_max
+                else (output - output_min) / (output_max - output_min)
+            )
 
         inference_path = self.predictions_dir / f"{image_file.stem}_inference.tif"
 
@@ -196,10 +200,7 @@ class MapGenerator(BaseClass):
             name=str(image_file.stem),
             data=output,
             dims=["y", "x"],
-            coords={
-                "y": tile.coords["y"],
-                "x": tile.coords["x"]
-            }
+            coords={"y": tile.coords["y"], "x": tile.coords["x"]},
         )
         output_da = output_da.rio.write_crs(self.crs)
         output_da = output_da.rio.write_transform(tile.rio.transform())
@@ -214,12 +215,12 @@ class MapGenerator(BaseClass):
                 driver="ESRI Shapefile",
             )
         return output_da
-    
+
     def filter_by_areas(self, output_files, settlements, primary_key):
         """
         Filters geospatial data arrays by settlement areas and merges them into a single GeoDataFrame.
 
-        Groups and merges tiles based on settlement boundaries, applies a mask to retain data 
+        Groups and merges tiles based on settlement boundaries, applies a mask to retain data
         within these boundaries, and enriches the resulting GeoDataFrame with attributes from `settlements`.
 
         Parameters:
@@ -228,13 +229,15 @@ class MapGenerator(BaseClass):
         - primary_key (str): Column in `settlements` for unique settlement identification.
 
         Returns:
-        - geopandas.GeoDataFrame: Merged and masked geospatial data for each settlement, enriched with 
+        - geopandas.GeoDataFrame: Merged and masked geospatial data for each settlement, enriched with
         settlement attributes.
         """
-    
+
         if settlements.crs != self.crs:
             settlements = settlements.to_crs(self.crs)
-        grouped_tiles = self.group_tiles_by_settlement(output_files, settlements, primary_key)
+        grouped_tiles = self.group_tiles_by_settlement(
+            output_files, settlements, primary_key
+        )
         gdfs = []
         for (pkey, geometry), names in grouped_tiles.items():
             # Filter the data arrays by name in output_files
@@ -242,7 +245,6 @@ class MapGenerator(BaseClass):
 
             combined = merge_arrays(settlement_tiles)
             combined.name = pkey
-
 
             # Create a mask from the settlement's geometry
             minx, miny, maxx, maxy = combined.rio.bounds()
@@ -252,18 +254,19 @@ class MapGenerator(BaseClass):
             if maxx < minx:
                 minx, maxx = maxx, minx
             height, width = combined.shape[-2:]
-            y, x = np.mgrid[miny:maxy:height*1j, minx:maxx:width*1j]
+            y, x = np.mgrid[miny : maxy : height * 1j, minx : maxx : width * 1j]
             mask = vectorized.contains(geometry, x, y)
 
             # Apply the mask to the data array
             combined = combined.where(mask, other=0)
             gdf = self._create_shp_from_mask(combined, primary_key)
             gdfs.append(gdf)
-        all_buildings = gpd.GeoDataFrame(pd.concat(gdfs), geometry='geometry', crs=self.crs)
-        return all_buildings.merge(settlements.drop('geometry', axis=1), on=primary_key)
+        all_buildings = gpd.GeoDataFrame(
+            pd.concat(gdfs), geometry="geometry", crs=self.crs
+        )
+        return all_buildings.merge(settlements.drop("geometry", axis=1), on=primary_key)
 
-
-    def create_tile_inferences(self, images_dir=None, settlements=None, primary_key=''):
+    def create_tile_inferences(self, images_dir=None, settlements=None, primary_key=""):
         """
         Performs inference on each tile in the images directory and optionally merges the results.
 
@@ -285,49 +288,51 @@ class MapGenerator(BaseClass):
         This function saves the inference results to disk. If merge_outputs is True, the results are grouped by settlement before being saved.
         """
 
-        
-
-        
-        
         output_files = []
         if any(self.predictions_dir.iterdir()):
             preds = list(self.predictions_dir.iterdir())
-            logging.info(f'Found {len(preds)} predictions in directory {self.predictions_dir}. Loading.. ')
+            logging.info(
+                f"Found {len(preds)} predictions in directory {self.predictions_dir}. Loading.. "
+            )
             output_files = [rxr.open_rasterio(file) for file in preds]
         else:
-            
-            logging.info('Starting tile inferences...')
-            images_dir = self.test_images_dir if images_dir is None else Path(images_dir)
-            image_files = list(images_dir.glob('*.tif')) + list(images_dir.glob('*.tiff'))
-            logging.info(f'Found {len(image_files)} image files in directory {images_dir}. ')
+
+            logging.info("Starting tile inferences...")
+            images_dir = (
+                self.test_images_dir if images_dir is None else Path(images_dir)
+            )
+            image_files = list(images_dir.glob("*.tif")) + list(
+                images_dir.glob("*.tiff")
+            )
+            logging.info(
+                f"Found {len(image_files)} image files in directory {images_dir}. "
+            )
             write_shp = True if settlements is None else False
             for image in image_files:
                 output_da = self.single_tile_inference(image, settlements, write_shp)
                 output_files.append(output_da)
-        # with ProcessPoolExecutor() as executor:
-        #     futures = [executor.submit(self.single_tile_inference, image_file, settlements, (not merge_outputs)) for image_file in image_files]
-        #     for future in futures:
-        #         result = future.result()
-        #         if result is not None:
-        #             output_files.append(result)
+            # with ProcessPoolExecutor() as executor:
+            #     futures = [executor.submit(self.single_tile_inference, image_file, settlements, (not merge_outputs)) for image_file in image_files]
+            #     for future in futures:
+            #         result = future.result()
+            #         if result is not None:
+            #             output_files.append(result)
 
-            logging.info(f'Inference completed for {len(output_files)} tiles.')
+            logging.info(f"Inference completed for {len(output_files)} tiles.")
 
         if settlements is not None:
             buildings_gdf = self.filter_by_areas(output_files, settlements, primary_key)
-            
-            shapefile_path = self.shapefiles_dir / "settlement_buildings.shp"
-            buildings_gdf.to_file(
-                shapefile_path,
-                driver="ESRI Shapefile"
-            )
-            logging.info('Output merged, joined with settlements data, and saved to disk.')
 
-        logging.info('Tile inference process completed.')
+            shapefile_path = self.shapefiles_dir / "settlement_buildings.shp"
+            buildings_gdf.to_file(shapefile_path, driver="ESRI Shapefile")
+            logging.info(
+                "Output merged, joined with settlements data, and saved to disk."
+            )
+
+        logging.info("Tile inference process completed.")
 
 
 if __name__ == "__main__":
     config = load_config("test_config.yaml")
     map_gen = MapGenerator(config)
     map_gen.create_tile_inferences()
-

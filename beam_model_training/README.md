@@ -8,7 +8,7 @@ The expected folder structure is as follow (set the location of project_director
 │ ├── labels // A shapefile or csv file (in Google Open Buildings Dataset format) containing all labels for the included images.  
 │ │ ├── label.shp  
 │ ├── models  
-│ │ ├── saved_models.pkl  
+│ │ ├── saved_models.pkl
 
 # Development environment - installation steps
 
@@ -46,7 +46,7 @@ python -m site --user-site
 
 ```bash
 USER_SITE_PATH=$(python -m site --user-site)
-mkdir $USER_SITE_PATH
+mkdir -p $USER_SITE_PATH
 ```
 
 3. Create file `pythonpath.pth` in this directory.

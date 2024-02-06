@@ -1,4 +1,3 @@
-
 from datetime import datetime
 from itertools import islice
 
@@ -39,7 +38,7 @@ class Evaluator(BaseClass):
         ----------
             config : dict
                 - root_dir: Path to the root directory containing model and dataset.
-                - test: 
+                - test:
                  - model_name: The name of the model stored in the models directory.
         """
 
@@ -54,10 +53,10 @@ class Evaluator(BaseClass):
             read_dirs += ["shapefiles", "predictions"]
         super().__init__(config, read_dirs=read_dirs, write_dirs=write_dirs)
         try:
-            
+
             model_path = super().load_model_path(config)
             self.model = load_learner(model_path)
-            
+
         except KeyError as e:
             raise KeyError(f"Config must have a value for {e}.")
 
@@ -72,11 +71,13 @@ class Evaluator(BaseClass):
             show : bool, optional
                 Whether to display the images or save them to disk (default: False).
         """
-        shapefiles = [f for f in self.shapefiles_dir.iterdir() if f.name.endswith('.shp')]
+        shapefiles = [
+            f for f in self.shapefiles_dir.iterdir() if f.name.endswith(".shp")
+        ]
         for shapefile in islice(shapefiles, 0, n_images):
-            if shapefile.name.endswith('.shp'):
+            if shapefile.name.endswith(".shp"):
                 # Construct the corresponding image file path
-                image_file = shapefile.name.replace('_predicted.shp', '.tif') 
+                image_file = shapefile.name.replace("_predicted.shp", ".tif")
                 image_path = self.test_images_dir / image_file
 
                 if image_path.exists():
@@ -87,13 +88,19 @@ class Evaluator(BaseClass):
                     with rasterio.open(image_path) as ds:
                         transform = ds.transform
 
-                        img = Image.fromarray(ds.read().transpose((1,2,0)))
+                        img = Image.fromarray(ds.read().transpose((1, 2, 0)))
                         draw = ImageDraw.Draw(img)
 
                         for geometry in gdf.geometry:
                             # Convert the polygon coordinates to image pixel coordinates and overlay to img
-                            if geometry.geom_type == 'Polygon':
-                                polygon = [crs_to_pixel_coords(x, y, transform) for x, y in zip(geometry.exterior.coords.xy[0], geometry.exterior.coords.xy[1])]
+                            if geometry.geom_type == "Polygon":
+                                polygon = [
+                                    crs_to_pixel_coords(x, y, transform)
+                                    for x, y in zip(
+                                        geometry.exterior.coords.xy[0],
+                                        geometry.exterior.coords.xy[1],
+                                    )
+                                ]
                                 draw.polygon(polygon, outline="red")
 
                         # Display the image
@@ -104,11 +111,12 @@ class Evaluator(BaseClass):
                         else:
                             output_path = self.eval_dir / f"eval_pred_{image_file}"
                             img.save(output_path)
-                            print(f"Image file {output_path.name} written to `{output_path.parent.name}`.")
+                            print(
+                                f"Image file {output_path.name} written to `{output_path.parent.name}`."
+                            )
 
                 else:
                     print(f"Image file {image_file} not found.")
-
 
     def compute_metrics(self):
         """
@@ -127,21 +135,28 @@ class Evaluator(BaseClass):
 
         num_files = 0
 
-        gt_images = [f for f in self.test_masks_dir.iterdir() if f.suffix.lower() in ['.tif', '.tiff']]
+        gt_images = [
+            f
+            for f in self.test_masks_dir.iterdir()
+            if f.suffix.lower() in [".tif", ".tiff"]
+        ]
         for groundtruth_path in gt_images:
-            pred_mask_path = self.predictions_dir / (groundtruth_path.stem +'_inference.tif')
+            pred_mask_path = self.predictions_dir / (
+                groundtruth_path.stem + "_inference.tif"
+            )
 
             if pred_mask_path.exists():
-                
+
                 # Load ground truth mask
-                gt_mask = np.array(Image.open(groundtruth_path).convert('L')) / 255  # Convert to binary (0 and 1)
+                gt_mask = (
+                    np.array(Image.open(groundtruth_path).convert("L")) / 255
+                )  # Convert to binary (0 and 1)
                 gt_mask = gt_mask.astype(int)
 
                 # Load predicted mask
                 with rasterio.open(pred_mask_path) as file:
                     pred_mask = file.read(1)
                     pred_mask = (pred_mask > 0.5).astype(int)
-
 
                 # Accumulate values for metrics
                 intersect = np.sum(pred_mask * gt_mask)
@@ -170,7 +185,7 @@ class Evaluator(BaseClass):
                 "Recall": [round(recall, 3)],
                 "Accuracy": [round(accuracy, 3)],
                 "Dice": [round(dice, 3)],
-                "IoU": [round(iou, 3)]
+                "IoU": [round(iou, 3)],
             }
             return pd.DataFrame(metrics)
         else:
@@ -191,13 +206,14 @@ class Evaluator(BaseClass):
             map_gen.create_tile_inferences()
         self.overlay_shapefiles_on_images(n_images)
         metrics = self.compute_metrics()
-        output_file_path = self.eval_dir / (self.model_version + '_metrics.csv')
+        output_file_path = self.eval_dir / (self.model_version + "_metrics.csv")
         if output_file_path.exists():
             df = pd.read_csv(output_file_path)
             df = pd.concat([df, metrics], ignore_index=True)
         else:
             df = metrics
         df.to_csv(output_file_path, index=False)
+
 
 if __name__ == "__main__":
     config = load_config("HRNet_config.yaml")
