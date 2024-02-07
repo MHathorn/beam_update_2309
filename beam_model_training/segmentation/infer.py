@@ -17,6 +17,7 @@ from fastai.vision.all import load_learner
 from PIL import Image
 from shapely import vectorized
 from shapely.geometry import Polygon, box
+from tqdm import tqdm
 
 from preprocess.sample import tile_in_settlement
 from segmentation.train import Trainer
@@ -301,7 +302,7 @@ class MapGenerator(BaseClass):
             image_files = list(images_dir.glob('*.tif')) + list(images_dir.glob('*.tiff'))
             logging.info(f'Found {len(image_files)} image files in directory {images_dir}. ')
             write_shp = True if settlements is None else False
-            for image in image_files:
+            for image in tqdm(image_files):
                 output_da = self.single_tile_inference(image, settlements, write_shp)
                 output_files.append(output_da)
         # with ProcessPoolExecutor() as executor:
