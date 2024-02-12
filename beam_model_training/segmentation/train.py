@@ -224,13 +224,13 @@ class Trainer(BaseClass):
         tile_size = self.train_params["tile_size"]
         total_pixels = tile_size**2
 
-        building_pixels = 0
+        building_pixels = []
 
         for file_path in mask_files:
             mask = rxr.open_rasterio(file_path)
-            building_pixels += np.count_nonzero(mask.data)
+            building_pixels.append(np.count_nonzero(mask.data))
 
-        percentages = building_pixels / (total_pixels * len(mask_files))
+        percentages = [b_pix / float(total_pixels) for b_pix in building_pixels]
         plt.hist(percentages, bins=20)
         plt.ylabel("Number of tiles")
         plt.xlabel(f"`building` pixel ratio (sample size = {len(mask_files)})")
@@ -238,22 +238,12 @@ class Trainer(BaseClass):
         plt.gca().spines["right"].set_color("none")
         plt.savefig(self.run_dir / "dataset_balance.png")
         print(
-            f"Mean Percentage of Pixels Belonging to Buildings: {round(percentages, 3)}"
+            f"Mean Percentage of Pixels Belonging to Buildings: {100 * round(sum(percentages) / len(percentages), 3)}%"
         )
         return percentages
 
-    def run(self):
-        """
-        Train a model based on the given parameters. It supports both HRNet and U-Net architectures.
-        It applies image augmentations, creates dataloaders, sets up the model, and finally trains it.
-
-        Returns:
-            Learner: Trained model.
-            Dataloaders: Dataloaders used for segmentation.
-        """
-        self.model_name = f"{self.train_params['architecture']}_{timestamp()}"
-        self.run_dir = BaseClass.create_if_not_exists(self.models_dir / self.model_name)
-
+    def setup_data_transforms(self):
+        """Set up data transformations."""
         tfms = [
             *aug_transforms(
                 mult=1.0,
@@ -270,11 +260,13 @@ class Trainer(BaseClass):
             Hue(max_hue=0.2),
             Saturation(max_lighting=0.5),
         ]
-
         if self.params["distance_weighting"]:
             # tfms.append(AddWeightsToTargets(weights_dir=self.train_weights_dir))
             self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
+        return tfms
 
+    def prepare_dataloaders(self, tfms):
+        """Prepare dataloaders for training and validation."""
         image_files = get_image_files(self.train_images_dir)
         assert (
             len(image_files) > 0
@@ -300,8 +292,28 @@ class Trainer(BaseClass):
             seed=self.params["seed"],
             batch_tfms=tfms,
             valid_pct=self.params["test_size"],
-            num_workers=0,
         )
+        return dls
+
+    def run(self):
+        """
+        Train a model based on the given parameters. It supports both HRNet and U-Net architectures.
+        It applies image augmentations, creates dataloaders, sets up the model, and finally trains it.
+
+        Returns:
+            Learner: Trained model.
+            Dataloaders: Dataloaders used for segmentation.
+        """
+        self.model_name = f"{self.train_params['architecture']}_{timestamp()}"
+        self.run_dir = BaseClass.create_if_not_exists(self.models_dir / self.model_name)
+
+        tfms = self.setup_data_transforms()
+
+        if self.params["distance_weighting"]:
+            # tfms.append(AddWeightsToTargets(weights_dir=self.train_weights_dir))
+            self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
+
+        dls = self.prepare_dataloaders(tfms)
 
         self.check_dataset_balance()
 

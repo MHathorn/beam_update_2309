@@ -58,7 +58,7 @@ class MapGenerator(BaseClass):
         Performs inference on each tile in the images directory and saves the results.
     """
 
-    def __init__(self, config, overwrite=False):
+    def __init__(self, config, generate_preds=False):
         """
         Constructs all the necessary attributes for the MapGenerator object.
 
@@ -69,7 +69,8 @@ class MapGenerator(BaseClass):
         """
         read_dirs = ["test_images", "models"]
         prediction_dirs = ["predictions", "shapefiles"]
-        if overwrite:
+        self.generate_preds = generate_preds
+        if generate_preds:
             super().__init__(config, read_dirs=read_dirs, write_dirs=prediction_dirs)
         else:
             super().__init__(config, read_dirs=(read_dirs + prediction_dirs))
@@ -289,7 +290,7 @@ class MapGenerator(BaseClass):
         """
 
         output_files = []
-        if any(self.predictions_dir.iterdir()):
+        if not self.generate_preds and any(self.predictions_dir.iterdir()):
             preds = list(self.predictions_dir.iterdir())
             logging.info(
                 f"Found {len(preds)} predictions in directory {self.predictions_dir}. Loading.. "

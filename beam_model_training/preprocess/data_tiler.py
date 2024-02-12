@@ -1,5 +1,5 @@
+import logging
 import gzip
-import shutil
 from pathlib import Path
 
 import geopandas as gpd
@@ -13,21 +13,22 @@ from shapely import wkt
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 from scipy.ndimage import gaussian_filter
-import logging
 from tqdm import tqdm
 
 from utils.base_class import BaseClass
 
 
 class DataTiler(BaseClass):
-    """Data Tiler class. This class loads from the configuration file an image directory, tile size, and tiles directory, and populates
-    the tile directory with image tiles ready for data augmentation and train-test split.
+    """Data Tiler class. This class loads from the configuration file an image directory,
+    tile size, and tiles directory, and populates the tile directory with image
+    tiles ready for data augmentation and train-test split.
 
     Expected configuration attributes:
     ├── input_dir
     │ ├── images // A list of files in GeoTIFF format.
     │ │ ├── image.tiff
-    │ ├── labels // A shapefile or csv file (in Google Open Buildings Dataset format) containing all labels for the included images.
+    │ ├── labels // A shapefile or csv file (in Google Open Buildings Dataset format) containing all labels
+                    for the included images.
     │ │ ├── label.shp (optional)
     If labels are presents in the directry, mask tiles will be created as well.
 
@@ -48,7 +49,7 @@ class DataTiler(BaseClass):
     def __init__(self, config):
 
         self.root_dir = Path(config["root_dir"])
-        self.crs = None
+        self.crs = ""
         self.spatial_resolution = None
         write_dirs = ["image_tiles"]
 
@@ -73,7 +74,7 @@ class DataTiler(BaseClass):
         if not valid_label_paths:
             self.labels = None
             print(
-                f"No labels file provided. Tiling images alone."
+                "No labels file provided. Tiling images alone."
                 if len(list(labels_dir.iterdir())) == 0
                 else "Warning: Label files are not in recognized format (shp, csv). Tiling images alone."
             )
@@ -117,7 +118,8 @@ class DataTiler(BaseClass):
 
     def load_labels(self, labels_files):
         """
-        This loads building footprints from one or more vector files and stores them as an instance attribute.
+        This loads building footprints from one or more vector files
+        and stores them as an instance attribute.
 
         Parameters:
         labels_files: Path to labels file, in .csv, .shp or .csv.gz format.
@@ -155,7 +157,7 @@ class DataTiler(BaseClass):
 
             buildings = pd.concat([buildings, df])
 
-        print(f"Deduplicating..")
+        print("Deduplicating..")
         buildings = buildings.drop_duplicates()
 
         print(f"Loaded {len(buildings)} labels for the imaged region.")
@@ -181,13 +183,13 @@ class DataTiler(BaseClass):
         """Write data array to raster file in tiff format."""
         data_path = directory / name
         data.rio.to_raster(data_path)
-        logging.info(f"Wrote {name} to {directory}")
 
     def generate_mask(self, image, labels, write=False):
         """
         Generate a binary mask from a vector file (shp or geojson).
 
-        Polygons are created from the vector labels. The mask is then created and eroded with a 3x3 kernel.
+        Polygons are created from the vector labels. The mask is then created and
+        eroded with a 3x3 kernel.
 
         Returns:
         numpy.ndarray: The generated mask, if 'write' is False. Otherwise, None.
@@ -232,7 +234,7 @@ class DataTiler(BaseClass):
         transform = image.rio.transform()
 
         # if self.tiling_params["erosion"]:
-        #     labels['geometry'] = labels['geometry'].buffer(-spatial_resolution * 1) # removing 1 pixel
+        #     labels['geometry'] = labels['geometry'].buffer(-spatial_resolution * 1)
 
         label_polygons = sum(
             labels["geometry"].apply(poly_from_utm, args=(transform,)), []
@@ -329,7 +331,8 @@ class DataTiler(BaseClass):
 
             if total_tiles == 0:
                 raise IOError(
-                    f"tile_size is bigger than the input image for {image.name} ({image.sizes['x']}, {image.sizes['y']}). \
+                    f"tile_size is bigger than the input image for {image.name} \
+                    ({image.sizes['x']}, {image.sizes['y']}). \
                               Please choose a smaller tile size or a different image."
                 )
 

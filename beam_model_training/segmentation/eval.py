@@ -202,20 +202,23 @@ class Evaluator(BaseClass):
 
         """
         if self.generate_preds:
-            map_gen = MapGenerator(self.config)
+            map_gen = MapGenerator(self.config, generate_preds=True)
             map_gen.create_tile_inferences()
         self.overlay_shapefiles_on_images(n_images)
         metrics = self.compute_metrics()
         output_file_path = self.eval_dir / (self.model_version + "_metrics.csv")
         if output_file_path.exists():
-            df = pd.read_csv(output_file_path)
-            df = pd.concat([df, metrics], ignore_index=True)
+            try:
+                df = pd.read_csv(output_file_path)
+                df = pd.concat([df, metrics], ignore_index=True)
+            except pd.errors.EmptyDataError:
+                df = metrics
         else:
             df = metrics
         df.to_csv(output_file_path, index=False)
 
 
 if __name__ == "__main__":
-    config = load_config("HRNet_config.yaml")
+    config = load_config("UNet_config.yaml")
     evaluator = Evaluator(config)
     evaluator.evaluate(n_images=10)
