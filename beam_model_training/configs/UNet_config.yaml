@@ -9,10 +9,10 @@ tiling:
   create_tile_shp: false
   erosion: true
   tile_size: 512
-root_dir: F:/dev_versions/SanSalvador_model_PAN
+root_dir: /datadrive/hand_labels_model
 seed: 2022
 test:
-  model_version: U-Net_20240124-1009
+  model_version: U-Net_20240206-1721
 test_size: 0.2
 # MODEL SETTINGS
 train:
@@ -20,4 +20,5 @@ train:
   backbone: resnet18
   epochs: 300
   loss_function: None
+  pretrained: true
 training: true

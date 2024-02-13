@@ -52,6 +52,10 @@ class Trainer(BaseClass):
         self.load_train_params(config)
         self.p2c_map = self._map_unique_classes()
 
+        if self.train_params["pretrained"]:
+            model_path = super().load_model_path(config, pretrained=True)
+            self.learner = load_learner(model_path)
+
     def load_params(self, config):
         """
         Load and assert general params for training.
@@ -77,6 +81,7 @@ class Trainer(BaseClass):
             "epochs",
             "loss_function",
             "batch_size",
+            "pretrained",
         ]
         self.train_params = {k: config["train"].get(k) for k in train_keys}
 
@@ -308,49 +313,55 @@ class Trainer(BaseClass):
         self.run_dir = BaseClass.create_if_not_exists(self.models_dir / self.model_name)
 
         tfms = self.setup_data_transforms()
-
-        if self.params["distance_weighting"]:
-            # tfms.append(AddWeightsToTargets(weights_dir=self.train_weights_dir))
-            self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
-
         dls = self.prepare_dataloaders(tfms)
-
         self.check_dataset_balance()
+        
+        if self.train_params["pretrained"]:
+            self.learner.dls = dls
+        else:
 
-        if self.train_params["architecture"].lower() == "hrnet":
-            self.learner = get_segmentation_learner(
-                dls,
-                number_classes=2,
-                segmentation_type="Semantic Segmentation",
-                architecture_name="hrnet",
-                backbone_name=self.train_params["backbone"],
-                model_dir=self.models_dir,
-                metrics=[Dice()],
-            ).to_fp16()
-        elif self.train_params["architecture"].lower() == "u-net":
-            loss_functions = {
-                "Dual_Focal_loss": DualFocalLoss(),
-                "CombinedLoss": CombinedLoss(),
-                "DiceLoss": DiceLoss(),
-                "FocalLoss": FocalLoss(),
-                None: None,
-                "CrossCombinedLoss": CrossCombinedLoss(),
-                "WeightedCrossCombinedLoss": WeightedCrossCombinedLoss(),
-            }
-            backbones = {
-                "resnet18": resnet18,
-                "resnet34": resnet34,
-                "resnet50": resnet50,
-                "resnet101": resnet101,
-                "vgg16_bn": vgg16_bn,
-            }
-            self.learner = unet_learner(
-                dls,
-                backbones.get(self.train_params["backbone"]),
-                n_out=2,
-                loss_func=loss_functions.get(self.train_params["loss_function"]),
-                metrics=[Dice(), JaccardCoeff()],
-            )
+            if self.params["distance_weighting"]:
+                # tfms.append(AddWeightsToTargets(weights_dir=self.train_weights_dir))
+                self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
+
+            
+
+            
+
+            if self.train_params["architecture"].lower() == "hrnet":
+                self.learner = get_segmentation_learner(
+                    dls,
+                    number_classes=2,
+                    segmentation_type="Semantic Segmentation",
+                    architecture_name="hrnet",
+                    backbone_name=self.train_params["backbone"],
+                    model_dir=self.models_dir,
+                    metrics=[Dice()],
+                ).to_fp16()
+            elif self.train_params["architecture"].lower() == "u-net":
+                loss_functions = {
+                    "Dual_Focal_loss": DualFocalLoss(),
+                    "CombinedLoss": CombinedLoss(),
+                    "DiceLoss": DiceLoss(),
+                    "FocalLoss": FocalLoss(),
+                    None: None,
+                    "CrossCombinedLoss": CrossCombinedLoss(),
+                    "WeightedCrossCombinedLoss": WeightedCrossCombinedLoss(),
+                }
+                backbones = {
+                    "resnet18": resnet18,
+                    "resnet34": resnet34,
+                    "resnet50": resnet50,
+                    "resnet101": resnet101,
+                    "vgg16_bn": vgg16_bn,
+                }
+                self.learner = unet_learner(
+                    dls,
+                    backbones.get(self.train_params["backbone"]),
+                    n_out=2,
+                    loss_func=loss_functions.get(self.train_params["loss_function"]),
+                    metrics=[Dice(), JaccardCoeff()],
+                )
 
         self.learner.fit_one_cycle(self.train_params["epochs"], cbs=self._callbacks())
         model_path = self._save()

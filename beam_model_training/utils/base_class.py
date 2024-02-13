@@ -7,6 +7,7 @@ class BaseClass:
     DIR_STRUCTURE = {
         "images": "images",
         "labels": "labels",
+        "pretrained": "pretrained",
         "image_tiles": "tiles/images",
         "mask_tiles": "tiles/masks",
         "label_tiles": "tiles/labels",
@@ -45,13 +46,17 @@ class BaseClass:
                 self.create_if_not_exists(dir_path, overwrite=overwrite),
             )
 
-    def load_model_path(self, config):
+    def load_model_path(self, config, pretrained=False):
         model_version = config["test"]["model_version"]
-        model_version_dir = self.models_dir / model_version
-        if not model_version_dir.exists():
-            raise ValueError(f"Couldn't find model under {model_version_dir}.")
-        # Find all pickle files in the directory
-        pickle_files = list(model_version_dir.glob("*.pkl"))
+        if pretrained:
+            model_version_dir = Path(config["root_dir"]) / self.DIR_STRUCTURE["pretrained"]
+            pickle_files = list(model_version_dir.glob(f"{model_version}*"))
+        else:
+            model_version_dir = self.models_dir / model_version
+            if not model_version_dir.exists():
+                raise ValueError(f"Couldn't find model under {model_version_dir}.")
+            # Find all pickle files in the directory
+            pickle_files = list(model_version_dir.glob("*.pkl"))
 
         # Check if there is exactly one pickle file
         if len(pickle_files) != 1:
