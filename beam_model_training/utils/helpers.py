@@ -148,3 +148,29 @@ def get_tile_size(image_path):
         )
 
     return img.shape[0]
+
+
+def copy_leaf_files(src_dir, dest_dir):
+    """
+    Copy all leaf files from src_dir to dest_dir without overwriting directories.
+    """
+    for root, dirs, files in os.walk(src_dir):
+        # Determine the relative path from the source directory to the current directory
+        rel_path = os.path.relpath(root, src_dir)
+        # Construct the corresponding destination directory path
+        dest_path = os.path.join(dest_dir, rel_path)
+        
+        # Ensure the destination directory exists
+        os.makedirs(dest_path, exist_ok=True)
+        
+        # Copy each file in the current directory to the destination directory
+        for file in files:
+            src_file_path = os.path.join(root, file)
+            dest_file_path = os.path.join(dest_path, file)
+            
+            # Check if the file already exists in the destination directory
+            if not os.path.exists(dest_file_path):
+                shutil.copy2(src_file_path, dest_file_path)
+                print(f"Copied: {src_file_path} to {dest_file_path}")
+            else:
+                print(f"File already exists, not overwriting: {dest_file_path}")
