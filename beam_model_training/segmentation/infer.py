@@ -303,9 +303,15 @@ class MapGenerator(BaseClass):
             images_dir = (
                 self.test_images_dir if images_dir is None else Path(images_dir)
             )
-            image_files = list(images_dir.glob("*.tif")) + list(
-                images_dir.glob("*.tiff")
-            )
+            image_files = list(
+                images_dir.glob("*.tif")
+                ) + list(
+                    images_dir.glob("*.tiff")
+                    ) + list(
+                        images_dir.glob("*.TIF")
+                        ) + list(
+                            images_dir.glob("*.TIFF")
+                        )
             logging.info(
                 f"Found {len(image_files)} image files in directory {images_dir}. "
             )
