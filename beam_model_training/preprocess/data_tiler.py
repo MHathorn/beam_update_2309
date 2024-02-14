@@ -49,7 +49,7 @@ class DataTiler(BaseClass):
     def __init__(self, config):
 
         self.root_dir = Path(config["root_dir"])
-        self.crs = ""
+        self.crs = None
         self.spatial_resolution = None
         write_dirs = ["image_tiles"]
 
