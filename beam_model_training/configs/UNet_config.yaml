@@ -9,16 +9,17 @@ tiling:
   create_tile_shp: false
   erosion: true
   tile_size: 512
-root_dir: /datadrive/hand_labels_model
+root_dir: /datadrive/dev_versions/hand_labels_model
 seed: 2022
 test:
-  model_version: U-Net_20240206-1721
+  model_version: U-Net_20240211-1231
 test_size: 0.2
 # MODEL SETTINGS
 train:
   architecture: U-Net
   backbone: resnet18
   epochs: 300
+  early_stopping: true
   loss_function: None
   pretrained: true
 training: true

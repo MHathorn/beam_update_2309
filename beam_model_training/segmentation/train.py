@@ -82,6 +82,7 @@ class Trainer(BaseClass):
             "loss_function",
             "batch_size",
             "pretrained",
+            "early_stopping",
         ]
         self.train_params = {k: config["train"].get(k) for k in train_keys}
 
@@ -189,10 +190,11 @@ class Trainer(BaseClass):
         cbs = [
             CSVLogger(fname=csv_path),
             ShowGraphCallback(),
-            EarlyStoppingCallback(patience=10),
         ]
         if self.train_params["architecture"].lower() == "u-net":
             cbs.append(TensorBoardCallback(log_dir=tb_dir))
+        if self.train_params["early_stopping"]:
+            cbs.append(EarlyStoppingCallback(patience=10))
         return cbs
 
     def get_y(self, x):
