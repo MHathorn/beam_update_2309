@@ -4,6 +4,8 @@ import argparse
 from pathlib import Path
 import subprocess
 import concurrent.futures
+from osgeo_utils.gdal_pansharpen import gdal_pansharpen
+
 
 def pansharpen_image(ms_path, pan_directory, output_directory):
     """
@@ -28,21 +30,12 @@ def pansharpen_image(ms_path, pan_directory, output_directory):
         output_image_path = output_directory / ms_path.name.replace('M3DS', 'PS3DS')
     
         if not output_image_path.exists():
-            # Construct the GDAL pansharpen command
-            command = [
-                'gdal_pansharpen.py',
-                str(pan_image_path),
-                str(ms_path),
-                str(output_image_path),
-                '-r', 'nearest',  # Resampling method, adjust as needed
-                '-co', 'COMPRESS=DEFLATE'  
-            ]
             
             # Execute the command
-            try:
-                subprocess.run(command, check=True)
-            except subprocess.CalledProcessError as e:
-                return f"Error processing {ms_path.name}: {e}"
+            gdal_pansharpen(
+                pan_name=str(pan_image_path),    
+                spectral_names=[str(ms_path)], 
+                dst_filename=str(output_image_path))
         else:
             return f"Pan-sharpened image already exists for {ms_path.name}, skipping."
     else:
@@ -68,8 +61,8 @@ def main(ms_directory, pan_directory, output_directory):
     ms_images.extend(ms_directory.rglob('*.TIF'))
     ms_images.extend(ms_directory.rglob('*.TIFF'))
 
-    # Remove duplicates if any (in case the filesystem is case-insensitive)
-    ms_images = list(set(ms_images))
+    # Remove duplicates and select multiband images
+    ms_images = list(img for img in set(ms_images) if 'M3DS' in str(img))
 
     if not ms_images:
         raise ValueError("No multispectral images found in the specified directory.")
@@ -90,9 +83,9 @@ def main(ms_directory, pan_directory, output_directory):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Pan-sharpening script.')
-    parser.add_argument('mul_dir', type=str, help='Directory containing multispectral images')
-    parser.add_argument('pan_dir', type=str, help='Directory containing panchromatic images')
-    parser.add_argument('output_dir', type=str, help='Output directory for pan-sharpened images')
+    parser.add_argument('--mul_dir', type=str, help='Directory containing multispectral images', required=True)
+    parser.add_argument('--pan_dir', type=str, help='Directory containing panchromatic images', required=True)
+    parser.add_argument('--output_dir', type=str, help='Output directory for pan-sharpened images', required=True)
 
     args = parser.parse_args()
 
