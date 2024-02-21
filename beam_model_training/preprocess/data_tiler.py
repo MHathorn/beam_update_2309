@@ -75,7 +75,7 @@ class DataTiler(BaseClass):
             self.labels = None
             print(
                 "No labels file provided. Tiling images alone."
-                if len(list(labels_dir.iterdir())) == 0
+                if not labels_dir.exists() or len(list(labels_dir.iterdir())) == 0
                 else "Warning: Label files are not in recognized format (shp, csv). Tiling images alone."
             )
         else:
