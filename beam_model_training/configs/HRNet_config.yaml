@@ -1,23 +1,21 @@
----
-# Template configuration for experiments.
-# Update for general changes, or make a copy for experiments.
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
+root_dir: F:/dev_versions/hand_labels_model
+seed: 2022
 # DATA SETTINGS
+test_size: 0.2
 tiling:
+  tile_labels: false
   distance_weighting: false
-  create_tile_shp: false
   erosion: true
   tile_size: 512
-root_dir: F:/dev_versions/SanJose_model
-seed: 2022
-test:
-  model_version: HRNet_20240130-1021
-test_size: 0.2
 # MODEL SETTINGS
+model_version: HRNet_20240211-2239 # required for evaluation or retraining
 train:
   architecture: HRNet
   backbone: hrnet_w30
+  early_stopping: false
   epochs: 300
   loss_function: None
+  pretrained: true
 training: true

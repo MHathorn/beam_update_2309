@@ -14,35 +14,33 @@ The configuration file is divided into three main sections:
 
 **codes:** A list of strings representing different categories or types in the experiment. For the current scope of the BEAM project this defaults to "Background" and "Building".
 
-**dirs:** A dictionary defining various directory paths used in the experiment. Each key represents a specific type of directory, and its value is the path relative to the root directory. For example, "eval" points to the sub-directory [ROOT_DIR]/eval.
+**seed:** An integer value used for random seed setting, ensuring reproducibility.
+
+**root_dir:** The root directory for the experiment data, e.g., "F:/ethekwini".
 
 ## Data Settings
 
 **erosion:** A boolean value (true or false) indicating whether erosion is applied in the data processing step.
 
-**root_dir:** The root directory for the experiment data, e.g., "F:/ethekwini".
-
-**seed:** An integer value used for random seed setting, ensuring reproducibility.
-
-**test:** A dictionary containing test-specific parameters. Currently, it includes:
-
-**model_name:** The name of the model file used for testing, e.g., "U-Net_20231218-1843.pkl".
-
-**test_size:** A float representing the proportion of the dataset to be used for testing, e.g., 0.2.
-
 **tile_size:** An integer defining the size of the tiles used in the experiment, e.g., 512.
 
 ## Model Settings
 
+**model_version:** The name of the model file used for testing, e.g., "U-Net_20231218-1843.pkl".
+
 **train:** A dictionary containing training-specific parameters, such as:
 
-**architecture:** The architecture of the model, e.g., "U-Net".
+- **architecture:** The architecture of the model, e.g., "U-Net".
 
-**backbone:** The backbone network used, e.g., "resnet18".
+- **backbone:** The backbone network used, e.g., "resnet18".
 
-**epochs:** An integer indicating the number of training epochs, e.g., 30.
+- **epochs:** An integer indicating the number of training epochs, e.g., 30.
 
-**loss_function:** Specifies the loss function used. It can be a string or None.
+- **loss_function:** Specifies the loss function used. It can be a string or None.
+
+- **early_stopping**: Specifies whether early stopping is applied to the model training.
+
+- **pretrained**: Indicates whether the a pretrained model version is provided in the pretrained/ directory.
 
 **training:** A boolean value (true or false) indicating whether the model is in the training phase.
 

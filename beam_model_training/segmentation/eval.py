@@ -43,7 +43,7 @@ class Evaluator(BaseClass):
         """
 
         self.config = config
-        self.model_version = config["test"]["model_version"]
+        self.model_version = config["model_version"]
         self.generate_preds = True
         read_dirs = ["test_images", "test_masks", "models", "eval"]
         write_dirs = []

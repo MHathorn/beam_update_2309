@@ -1,25 +1,21 @@
----
-# Template configuration for experiments.
-# Update for general changes, or make a copy for experiments.
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
+root_dir: F:/dev_versions/hand_labels_model
+seed: 2022
 # DATA SETTINGS
+test_size: 0.2
 tiling:
+  tile_labels: false
   distance_weighting: false
-  create_tile_shp: false
   erosion: true
   tile_size: 512
-root_dir: /datadrive/dev_versions/hand_labels_model
-seed: 2022
-test:
-  model_version: U-Net_20240211-1231
-test_size: 0.2
 # MODEL SETTINGS
+model_version: U-Net_20240211-1231 # required for evaluation or retraining
 train:
   architecture: U-Net
   backbone: resnet18
+  early_stopping: false
   epochs: 300
-  early_stopping: true
   loss_function: None
   pretrained: true
 training: true

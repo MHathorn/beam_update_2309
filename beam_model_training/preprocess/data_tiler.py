@@ -88,7 +88,7 @@ class DataTiler(BaseClass):
         super().__init__(config, write_dirs=write_dirs)
 
     def load_tiling_params(self, config):
-        tiling_keys = ["distance_weighting", "create_tile_shp", "erosion", "tile_size"]
+        tiling_keys = ["distance_weighting", "tile_labels", "erosion", "tile_size"]
         return {k: config["tiling"].get(k) for k in tiling_keys}
 
     def load_images(self, image_dir):
@@ -369,7 +369,7 @@ class DataTiler(BaseClass):
                             )
 
                         # Save labels in the appropriate folder.
-                        if self.tiling_params["create_tile_shp"]:
+                        if self.tiling_params["tile_labels"]:
                             self.save_tile_shapefile(labels, tile_geom, tile_name)
                     pbar.update(1)
             pbar.close()

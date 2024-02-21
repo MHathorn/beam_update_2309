@@ -47,7 +47,7 @@ class BaseClass:
             )
 
     def load_model_path(self, config, pretrained=False):
-        model_version = config["test"]["model_version"]
+        model_version = config["model_version"]
         if pretrained:
             model_version_dir = Path(config["root_dir"]) / self.DIR_STRUCTURE["pretrained"]
             pickle_files = list(model_version_dir.glob(f"{model_version}*"))

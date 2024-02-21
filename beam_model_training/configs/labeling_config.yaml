@@ -1,23 +1,14 @@
----
-# Template configuration for experiments.
-# Update for general changes, or make a copy for experiments.
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
-# DATA SETTINGS
-tiling:
-  distance_weighting: true
-  create_tile_shp: false
-  erosion: true
-  tile_size: 512
 root_dir: F:/SanJose_labeling2
 seed: 2022
-test:
-  model_version: U-Net_20241117-1410
+# DATA SETTINGS
 test_size: 0.2
+tiling:
+  tile_labels: false
+  distance_weighting: true
+  erosion: true
+  tile_size: 512
 # MODEL SETTINGS
-train:
-  architecture: U-Net
-  backbone: resnet18
-  epochs: 30
-  loss_function: None
+model_version: U-Net_20241117-1410 # required for evaluation or retraining
 training: false

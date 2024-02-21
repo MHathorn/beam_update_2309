@@ -1,20 +1,16 @@
----
-# Template configuration for experiments.
-# Update for general changes, or make a copy for experiments.
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
-# DATA SETTINGS
-tiling:
-  distance_weighting: true
-  create_tile_shp: false
-  erosion: true
-  tile_size: 256
 root_dir: C:\Users\adm.nkiner\Documents\BEAM\app\beam_update_2309\beam_model_training\tests\satellite
 seed: 2022
-test:
-  model_version: U-Net_20240117-1630
+# DATA SETTINGS
 test_size: 0.2
+tiling:
+  tile_labels: false
+  distance_weighting: true
+  erosion: true
+  tile_size: 256
 # MODEL SETTINGS
+model_version: U-Net_20240117-1630 # required for evaluation or retraining
 train:
   architecture: U-Net
   backbone: resnet18

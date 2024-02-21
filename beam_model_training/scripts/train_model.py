@@ -17,9 +17,9 @@ def main(config_file):
     config = load_config(config_file)
 
     trainer = Trainer(config)
-    trainer.run()
+    # trainer.run()
 
-    config["test"]["model_version"] = trainer.model_name
+    config["model_version"] = "HRNet_20240215-1703"
     evaluator = Evaluator(config)
     evaluator.evaluate(n_images=0)
 
