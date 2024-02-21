@@ -86,7 +86,10 @@ class MapGenerator(BaseClass):
             # Get the first image file
             img_file = next(images_dir_path.glob("*"))  # Adjust the pattern as needed
             img = rxr.open_rasterio(img_file)
+            print(f"CRS now initialized to {img.rio.crs}.")
             return img.rio.crs
+        else:
+            print("Warning: CRS could not be set at initialization.")
 
     def _create_shp_from_mask(self, mask_da, primary_key="shape_id"):
         """
@@ -177,9 +180,11 @@ class MapGenerator(BaseClass):
         GeoTIFF file, and generates a shapefile from the output mask.
         """
         tile = get_rgb_channels(image_file)
+        if tile.rio.crs != self.crs:
+            tile = tile.rio.reproject(self.crs)
 
         if AOI_gpd is not None and not tile_in_settlement(tile, AOI_gpd):
-            output = np.zeros_like(tile.data.transpose(1, 2, 0)[:, :, 0])
+            return
         else:
             # Run inference and save as grayscale image
             image = Image.fromarray(tile.data.transpose(1, 2, 0))
@@ -289,14 +294,27 @@ class MapGenerator(BaseClass):
         -----
         This function saves the inference results to disk. If merge_outputs is True, the results are grouped by settlement before being saved.
         """
+        
+        
 
+        if self.crs is None and images_dir:
+            self.crs = self.get_crs(images_dir)
+        elif self.crs is None and images_dir is None:
+            raise rxr.exceptions.MissingCRS("CRS could not be set. Please provide a valid images directory.")
+        
         output_files = []
         if not self.generate_preds and any(self.predictions_dir.iterdir()):
             preds = list(self.predictions_dir.iterdir())
             logging.info(
                 f"Found {len(preds)} predictions in directory {self.predictions_dir}. Loading.. "
             )
-            output_files = [rxr.open_rasterio(file) for file in preds]
+            output_files = []
+            for file in output_files:
+                img = rxr.open_rasterio(file)
+                if file.name is None:
+                    file.name = file.long_name
+                output_files.append(img)
+            
         else:
 
             logging.info("Starting tile inferences...")
@@ -316,6 +334,8 @@ class MapGenerator(BaseClass):
                 f"Found {len(image_files)} image files in directory {images_dir}. "
             )
             write_shp = True if settlements is None else False
+            if settlements.crs != self.crs:
+                settlements = settlements.to_crs(self.crs) 
             for image in tqdm(image_files):
                 output_da = self.single_tile_inference(image, settlements, write_shp)
                 output_files.append(output_da)

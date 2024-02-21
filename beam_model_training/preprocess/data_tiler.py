@@ -309,10 +309,10 @@ class DataTiler(BaseClass):
             print("Preparing inputs..")
             if self.crs is None:
                 self.crs = image.rio.crs
-                if self.labels.crs != self.crs:
+                if self.labels and self.labels.crs != self.crs:
                     self.labels = self.labels.to_crs(self.crs)
             elif image.rio.crs != self.crs:
-                image.rio.reproject(self.crs)
+                image = image.rio.reproject(self.crs)
 
             # Prepare labels for training.
             if self.labels is not None:
