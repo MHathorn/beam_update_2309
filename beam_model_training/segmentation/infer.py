@@ -1,20 +1,19 @@
 import logging
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import cv2
 import geopandas as gpd
+import networkx as nx
 import numpy as np
 import pandas as pd
 import rasterio
-from rasterio.transform import from_origin
 import rioxarray as rxr
-from rioxarray.merge import merge_arrays
 import torch
 import xarray as xr
 from fastai.vision.all import load_learner
 from PIL import Image
-from shapely import vectorized
+from rioxarray.merge import merge_arrays
 from shapely.geometry import Polygon, box
 from tqdm import tqdm
 
@@ -129,43 +128,76 @@ class MapGenerator(BaseClass):
         polygons = [Polygon(shape[0]["coordinates"][0]) for shape in shapes]
 
         gdf = gpd.GeoDataFrame(crs=self.crs, geometry=polygons)
-        gdf[primary_key] = mask_da.name
         gdf["bldg_area"] = gdf["geometry"].area
         max_area_idx = gdf["bldg_area"].idxmax()
         gdf = gdf.drop([max_area_idx])
-        # Drop shapes that are too small or too large to be a building
-        gdf = gdf[(gdf["bldg_area"] > 2) & (gdf["bldg_area"] < 500000)]
+        # Drop shapes that are too small or too large to be an informal settlement building
+        gdf = gdf[(gdf["bldg_area"] > 2) & (gdf["bldg_area"] < 30000)]
         # in case the geo-dataframe is empty which means no settlements are detected
         if gdf.empty:
             return gpd.GeoDataFrame(geometry=[])
 
         return gdf
 
-    def group_tiles_by_settlement(self, mask_tiles, settlements, primary_key):
+    def group_tiles_by_connected_area(self, mask_tiles, settlements, primary_key):
         """
-        Groups tiles by their corresponding settlement based on geographic coordinates.
-
+        Groups tiles by area covered by a connected group of tiles, from which building polygons will be extracted at once.
 
         Parameters:
-        - mask_tiles (list): List of Data Arrays representing the tiles to be potentially merged.
-        - settlements (GeoDataFrame): A GeoDataFrame representing the settlements.
+        mask_tiles (list): A list of rasterio dataset objects representing tiles.
+        settlements (GeoDataFrame): A GeoDataFrame containing settlement data. Each row represents a settlement with a geometry column for its spatial representation.
+        primary_key (str): The name of the column in the settlements GeoDataFrame to use as the primary key.
 
-        Returns
-        -------
-        grouped_tiles : pandas.Series
-            A series where each entry is a list of tile names that cover a unique settlement.
-            The index of the series are tuples containing the OBJECTID and geometry of the settlement.
+        Returns:
+        grouped_tiles (Series): A pandas Series where each entry is a list of tile names associated with a merged settlement group. The index of the Series is a MultiIndex with levels [f'{primary_key}_group', 'geometry'].
 
         """
-        data = [
-            {"name": da.name, "geometry": box(*da.rio.bounds())} for da in mask_tiles
-        ]
-
-        # Create a GeoDataFrame from the list of dictionaries
-        gdf = gpd.GeoDataFrame(data, crs=self.crs)
-        joined = gpd.sjoin(settlements, gdf, how="inner", op="intersects")
-        grouped_tiles = joined.groupby([primary_key, "geometry"])["name"].apply(list)
-
+        # Create a GeoDataFrame from the list of tiles
+        data = [{"name": da.name, "geometry": box(*da.rio.bounds())} for da in mask_tiles if da]
+        tiles_gdf = gpd.GeoDataFrame(data, crs=self.crs)
+        
+        # Find settlements in tiles and create a graph of settlements
+        joined = gpd.sjoin(settlements, tiles_gdf, how="inner", op="intersects")
+        
+        G = nx.Graph()
+        
+        # Add nodes for each settlement
+        for index, row in joined.iterrows():
+            G.add_node(index, **{primary_key: row[primary_key], 'geometry': row['geometry']})
+        
+        # Add edges between settlements that share the same tile (indicating potential overlap)
+        for _, group in joined.groupby('name'):
+            for i, _ in group.iterrows():
+                for j, _ in group.iterrows():
+                    if i != j:
+                        G.add_edge(i, j)
+        
+        # Find connected components (groups of overlapping settlements)
+        components = list(nx.connected_components(G))
+        
+        # Merge overlapping settlements into new settlement groups
+        merged_settlements = []
+        for component in components:
+            # Extract the settlements in this component
+            component_settlements = joined.loc[list(component)]
+            
+            # Merge their geometries into a single geometry (unary_union)
+            merged_geometry = component_settlements['geometry'].unary_union
+            
+            # Create a new entry for the merged settlement
+            merged_settlement = {
+                f'{primary_key}_group': '_'.join(map(str, component_settlements[primary_key].unique())),
+                'geometry': merged_geometry
+            }
+            merged_settlements.append(merged_settlement)
+        
+        # Create a new GeoDataFrame for the merged settlements
+        merged_settlements_gdf = gpd.GeoDataFrame(merged_settlements, crs=self.crs)
+        
+        # Step 4: Repeat spatial join with the merged settlements to update tile associations
+        final_joined = gpd.sjoin(merged_settlements_gdf, tiles_gdf, how="inner", op="intersects")
+        grouped_tiles = final_joined.groupby([f'{primary_key}_group', "geometry"])["name"].apply(list)
+        
         return grouped_tiles
 
     def single_tile_inference(self, image_file, AOI_gpd=None, write_shp=True):
@@ -239,39 +271,27 @@ class MapGenerator(BaseClass):
         - geopandas.GeoDataFrame: Merged and masked geospatial data for each settlement, enriched with
         settlement attributes.
         """
-
-        if settlements.crs != self.crs:
-            settlements = settlements.to_crs(self.crs)
-        grouped_tiles = self.group_tiles_by_settlement(
+         
+        grouped_tiles = self.group_tiles_by_connected_area(
             output_files, settlements, primary_key
         )
         gdfs = []
-        for (pkey, geometry), names in grouped_tiles.items():
+        for (pkey, _), names in grouped_tiles.items():
             # Filter the data arrays by name in output_files
             settlement_tiles = [da for da in output_files if da.name in names]
 
             combined = merge_arrays(settlement_tiles)
             combined.name = pkey
 
-            # Create a mask from the settlement's geometry
-            minx, miny, maxx, maxy = combined.rio.bounds()
-            # Correcting for flipped bounds in certain geometries
-            if maxy < miny:
-                miny, maxy = maxy, miny
-            if maxx < minx:
-                minx, maxx = maxx, minx
-            height, width = combined.shape[-2:]
-            y, x = np.mgrid[miny : maxy : height * 1j, minx : maxx : width * 1j]
-            mask = vectorized.contains(geometry, x, y)
-
-            # Apply the mask to the data array
-            combined = combined.where(mask, other=0)
             gdf = self._create_shp_from_mask(combined, primary_key)
             gdfs.append(gdf)
         all_buildings = gpd.GeoDataFrame(
             pd.concat(gdfs), geometry="geometry", crs=self.crs
         )
-        return all_buildings.merge(settlements.drop("geometry", axis=1), on=primary_key)
+        filtered_buildings = gpd.sjoin(all_buildings, settlements, how='inner', op="intersects")
+        filtered_buildings = filtered_buildings.drop_duplicates(subset=['geometry']).reset_index()
+
+        return filtered_buildings
 
     def create_tile_inferences(self, images_dir=None, settlements=None, primary_key=""):
         """
@@ -325,11 +345,8 @@ class MapGenerator(BaseClass):
                 images_dir.glob("*.tif")
                 ) + list(
                     images_dir.glob("*.tiff")
-                    ) + list(
-                        images_dir.glob("*.TIF")
-                        ) + list(
-                            images_dir.glob("*.TIFF")
-                        )
+                    )
+            image_files = [img for img in image_files if img.name.startswith("23JUN18160657-PS3DS_R5C1-016144386010_01_P001")]
             logging.info(
                 f"Found {len(image_files)} image files in directory {images_dir}. "
             )
@@ -338,16 +355,33 @@ class MapGenerator(BaseClass):
                 settlements = settlements.to_crs(self.crs) 
             for image in tqdm(image_files):
                 output_da = self.single_tile_inference(image, settlements, write_shp)
-                output_files.append(output_da)
+                if output_da is not None:
+                    output_files.append(output_da)
             # with ProcessPoolExecutor() as executor:
-            #     futures = [executor.submit(self.single_tile_inference, image_file, settlements, (not merge_outputs)) for image_file in image_files]
-            #     for future in futures:
-            #         result = future.result()
+            #     futures = {executor.submit(self.single_tile_inference, image_file, settlements, write_shp) for image_file in image_files}
+                
+            #     # Create a progress bar
+            #     progress_bar = tqdm(total=len(futures), desc="Processing", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
+                
+            #     for future in as_completed(futures):
+            #         try:
+            #             result = future.result()
+            #         except Exception as e:
+            #             print(f"An exception occurred: {e}")
+            #             continue
             #         if result is not None:
             #             output_files.append(result)
+                    
+            #         # Update the progress bar
+            #         progress_bar.update(1)
+
+            #     # Close the progress bar
+            #     progress_bar.close()
 
             logging.info(f"Inference completed for {len(output_files)} tiles.")
 
+        if len(output_files) == 0:
+            print("")
         if settlements is not None:
             buildings_gdf = self.filter_by_areas(output_files, settlements, primary_key)
 
