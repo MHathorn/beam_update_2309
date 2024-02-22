@@ -52,7 +52,7 @@ class MapGenerator(BaseClass):
 
     Methods
     -------
-    _create_shp_from_mask(file, mask_array):
+    create_shp_from_mask(file, mask_array):
         Creates a shapefile from a binary mask array and saves it to disk.
     create_tile_inferences():
         Performs inference on each tile in the images directory and saves the results.
@@ -90,7 +90,7 @@ class MapGenerator(BaseClass):
         else:
             print("Warning: CRS could not be set at initialization.")
 
-    def _create_shp_from_mask(self, mask_da, primary_key="shape_id"):
+    def create_shp_from_mask(self, mask_da):
         """
         Creates a GeoDataFrame from a binary mask array.
         The function first dilates the mask with a 3x3 square kernel, which
@@ -153,7 +153,7 @@ class MapGenerator(BaseClass):
 
         """
         # Create a GeoDataFrame from the list of tiles
-        data = [{"name": da.name, "geometry": box(*da.rio.bounds())} for da in mask_tiles if da]
+        data = [{"name": da.name, "geometry": box(*da.rio.bounds())} for da in mask_tiles]
         tiles_gdf = gpd.GeoDataFrame(data, crs=self.crs)
         
         # Find settlements in tiles and create a graph of settlements
@@ -248,7 +248,7 @@ class MapGenerator(BaseClass):
         # Generate shapefile
         if write_shp:
             shp_path = self.shapefiles_dir / f"{image_file.stem}_predicted.shp"
-            vector_df = self._create_shp_from_mask(output_da)
+            vector_df = self.create_shp_from_mask(output_da)
             vector_df.to_file(
                 shp_path,
                 driver="ESRI Shapefile",
@@ -283,7 +283,7 @@ class MapGenerator(BaseClass):
             combined = merge_arrays(settlement_tiles)
             combined.name = pkey
 
-            gdf = self._create_shp_from_mask(combined, primary_key)
+            gdf = self.create_shp_from_mask(combined, primary_key)
             gdfs.append(gdf)
         all_buildings = gpd.GeoDataFrame(
             pd.concat(gdfs), geometry="geometry", crs=self.crs
@@ -346,43 +346,43 @@ class MapGenerator(BaseClass):
                 ) + list(
                     images_dir.glob("*.tiff")
                     )
-            image_files = [img for img in image_files if img.name.startswith("23JUN18160657-PS3DS_R5C1-016144386010_01_P001")]
             logging.info(
                 f"Found {len(image_files)} image files in directory {images_dir}. "
             )
             write_shp = True if settlements is None else False
-            if settlements.crs != self.crs:
-                settlements = settlements.to_crs(self.crs) 
-            for image in tqdm(image_files):
-                output_da = self.single_tile_inference(image, settlements, write_shp)
-                if output_da is not None:
-                    output_files.append(output_da)
-            # with ProcessPoolExecutor() as executor:
-            #     futures = {executor.submit(self.single_tile_inference, image_file, settlements, write_shp) for image_file in image_files}
+            
+            # for image in tqdm(image_files):
+            #     output_da = self.single_tile_inference(image, settlements, write_shp)
+            #     if output_da is not None:
+            #         output_files.append(output_da)
+            with ProcessPoolExecutor() as executor:
+                futures = {executor.submit(self.single_tile_inference, image_file, settlements, write_shp) for image_file in image_files}
                 
-            #     # Create a progress bar
-            #     progress_bar = tqdm(total=len(futures), desc="Processing", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
+                # Create a progress bar
+                progress_bar = tqdm(total=len(futures), desc="Processing", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
                 
-            #     for future in as_completed(futures):
-            #         try:
-            #             result = future.result()
-            #         except Exception as e:
-            #             print(f"An exception occurred: {e}")
-            #             continue
-            #         if result is not None:
-            #             output_files.append(result)
+                for future in as_completed(futures):
+                    try:
+                        result = future.result()
+                    except Exception as e:
+                        print(f"An exception occurred: {e}")
+                        continue
+                    if result is not None:
+                        output_files.append(result)
                     
-            #         # Update the progress bar
-            #         progress_bar.update(1)
+                    # Update the progress bar
+                    progress_bar.update(1)
 
-            #     # Close the progress bar
-            #     progress_bar.close()
+                # Close the progress bar
+                progress_bar.close()
 
             logging.info(f"Inference completed for {len(output_files)} tiles.")
 
         if len(output_files) == 0:
             print("")
         if settlements is not None:
+            if settlements.crs != self.crs:
+                settlements = settlements.to_crs(self.crs)
             buildings_gdf = self.filter_by_areas(output_files, settlements, primary_key)
 
             shapefile_path = self.shapefiles_dir / "settlement_buildings.shp"

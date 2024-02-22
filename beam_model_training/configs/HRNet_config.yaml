@@ -10,7 +10,7 @@ tiling:
   erosion: true
   tile_size: 512
 # MODEL SETTINGS
-model_version: HRNet_20240211-2239 # required for evaluation or retraining
+model_version: HRNet_20240215-1703 # required for evaluation or retraining
 train:
   architecture: HRNet
   backbone: hrnet_w30

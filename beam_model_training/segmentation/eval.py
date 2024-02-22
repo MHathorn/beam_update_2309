@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import rasterio
+import rioxarray as rxr
 from fastai.vision.all import load_learner
 from PIL import Image, ImageDraw
 from segmentation.infer import MapGenerator
@@ -118,7 +119,7 @@ class Evaluator(BaseClass):
                 else:
                     print(f"Image file {image_file} not found.")
 
-    def compute_metrics(self):
+    def compute_metrics(self, map_gen, iou_threshold=0.5):
         """
         Computes precision, recall, accuracy, dice coefficient, and IoU for the model's predictions.
 
@@ -127,11 +128,21 @@ class Evaluator(BaseClass):
             pd.DataFrame
                 A dataframe containing the computed metrics.
         """
+
+        def calculate_building_iou(poly1, poly2):
+            intersection = poly1.intersection(poly2).area
+            union = poly1.union(poly2).area
+            return intersection / union
+
+
         sum_intersect = 0
         sum_total_pred = 0
         sum_total_truth = 0
         sum_union = 0
         sum_xor = 0
+        buildings_intersect = 0
+        buildings_total_pred = 0
+        buildings_total_truth = 0
 
         num_files = 0
 
@@ -148,23 +159,30 @@ class Evaluator(BaseClass):
             if pred_mask_path.exists():
 
                 # Load ground truth mask
-                gt_mask = (
-                    np.array(Image.open(groundtruth_path).convert("L")) / 255
-                )  # Convert to binary (0 and 1)
-                gt_mask = gt_mask.astype(int)
+                gt_mask = rxr.open_rasterio(groundtruth_path, default_name=groundtruth_path.name)
+                gt_gdf = map_gen.create_shp_from_mask(gt_mask)
+                gt_values = (gt_mask / 255).astype(int).values  # Convert to binary (0 and 1)
 
                 # Load predicted mask
-                with rasterio.open(pred_mask_path) as file:
-                    pred_mask = file.read(1)
-                    pred_mask = (pred_mask > 0.5).astype(int)
+                pred_mask = rxr.open_rasterio(pred_mask_path, default_name=pred_mask_path.name)
+                pred_gdf = map_gen.create_shp_from_mask(pred_mask)
+                pred_values = (pred_mask > 0.5).astype(int).values
 
                 # Accumulate values for metrics
-                intersect = np.sum(pred_mask * gt_mask)
+                intersect = np.sum(pred_values * gt_values)
                 sum_intersect += intersect
-                sum_total_pred += np.sum(pred_mask)
-                sum_total_truth += np.sum(gt_mask)
-                sum_union += np.sum(pred_mask) + np.sum(gt_mask) - intersect
-                sum_xor += np.sum(pred_mask == gt_mask)
+                sum_total_pred += np.sum(pred_values)
+                sum_total_truth += np.sum(gt_values)
+                sum_union += np.sum(pred_values) + np.sum(gt_values) - intersect
+                sum_xor += np.sum(pred_values == gt_values)
+                buildings_total_pred += len(pred_gdf)
+                buildings_total_truth += len(gt_gdf)
+                
+                for pred_poly in pred_gdf.geometry:
+                    for gt_poly in gt_gdf.geometry:
+                        iou = calculate_building_iou(pred_poly, gt_poly)
+                        if iou >= iou_threshold:
+                            buildings_intersect += 1
 
                 num_files += 1
             else:
@@ -177,21 +195,26 @@ class Evaluator(BaseClass):
             accuracy = sum_xor / (sum_union + sum_xor - sum_intersect)
             dice = 2 * sum_intersect / (sum_total_pred + sum_total_truth)
             iou = sum_intersect / sum_union
+            building_precision = buildings_intersect / buildings_total_pred
+            building_recall = buildings_intersect / buildings_total_truth
 
             # Create a DataFrame with the aggregated metrics
             metrics = {
                 "EvalTimestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "ModelVersion": self.model_version,
                 "Precision": [round(precision, 3)],
                 "Recall": [round(recall, 3)],
                 "Accuracy": [round(accuracy, 3)],
                 "Dice": [round(dice, 3)],
                 "IoU": [round(iou, 3)],
+                f"Building Precision @ {iou_threshold} IoU": [round(building_precision, 3)],
+                f"Building Recall @ {iou_threshold} IoU": [round(building_recall, 3)],
             }
             return pd.DataFrame(metrics)
         else:
             return pd.DataFrame()
 
-    def evaluate(self, n_images=10):
+    def evaluate(self, n_images=10, iou_threshold=0.5):
         """
         Generates predictions, overlays them on images, computes metrics, and saves the results.
 
@@ -205,7 +228,7 @@ class Evaluator(BaseClass):
             map_gen = MapGenerator(self.config, generate_preds=True)
             map_gen.create_tile_inferences()
         self.overlay_shapefiles_on_images(n_images)
-        metrics = self.compute_metrics()
+        metrics = self.compute_metrics(map_gen, iou_threshold)
         output_file_path = self.eval_dir / (self.model_version + "_metrics.csv")
         if output_file_path.exists():
             try:
@@ -219,6 +242,6 @@ class Evaluator(BaseClass):
 
 
 if __name__ == "__main__":
-    config = load_config("UNet_config.yaml")
+    config = load_config("HRNet_config.yaml")
     evaluator = Evaluator(config)
-    evaluator.evaluate(n_images=10)
+    evaluator.evaluate(n_images=10, iou_threshold=0.3)
