@@ -1,6 +1,6 @@
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
-root_dir: F:/map_generation/SanJose_model_PS
+root_dir: /datadrive/map_generation/SanJose
 seed: 2022
 # DATA SETTINGS
 test_size: 0.2
@@ -10,12 +10,5 @@ tiling:
   erosion: true
   tile_size: 512
 # MODEL SETTINGS
-model_version: 20240215_retrained_final # required for evaluation or retraining
-train:
-  architecture: HRNet
-  backbone: hrnet_w30
-  early_stopping: false
-  epochs: 300
-  loss_function: None
-  pretrained: true
-training: true
+model_version: 20240215_unet_retrained_resnet50 # required for evaluation or retraining
+training: false

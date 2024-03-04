@@ -242,6 +242,6 @@ class Evaluator(BaseClass):
 
 
 if __name__ == "__main__":
-    config = load_config("HRNet_config.yaml")
+    config = load_config("UNet_config.yaml")
     evaluator = Evaluator(config)
     evaluator.evaluate(n_images=10, iou_threshold=0.3)

@@ -21,8 +21,8 @@ if __name__ == "__main__":
             df = gpd.read_file(file_path)
             settlements = pd.concat([settlements, df])
 
-    settlements = settlements[settlements.OBJECTID.isin([267,414,493,533,196,290,300,518,276])]
-    map_gen = MapGenerator(config, generate_preds=True)
+    # settlements = settlements[settlements.OBJECTID.isin([267,414,493,533,196,290,300,518,276])]
+    map_gen = MapGenerator(config, generate_preds=False)
     map_gen.create_tile_inferences(
         images_dir=img_dir,
         settlements=settlements, primary_key="OBJECTID"

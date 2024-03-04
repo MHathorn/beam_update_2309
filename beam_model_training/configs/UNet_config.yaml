@@ -9,11 +9,14 @@ tiling:
   distance_weighting: false
   erosion: true
   tile_size: 512
+root_dir: /datadrive/dev_versions/hand_labels_model
+seed: 2022
+test_size: 0.2
 # MODEL SETTINGS
-model_version: U-Net_20240211-1231 # required for evaluation or retraining
+model_version: U-Net_20240221-1602 # required for evaluation or retraining
 train:
   architecture: U-Net
-  backbone: resnet18
+  backbone: resnet50
   early_stopping: false
   epochs: 300
   loss_function: None

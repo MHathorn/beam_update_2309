@@ -79,7 +79,7 @@ class DataTiler(BaseClass):
                 else "Warning: Label files are not in recognized format (shp, csv). Tiling images alone."
             )
         else:
-            write_dirs += ["mask_tiles", "label_tiles"]
+            write_dirs += ["mask_tiles"]
             if self.tiling_params["distance_weighting"]:
                 write_dirs.append("weight_tiles")
             # Loading labels from csv / shapefile.
@@ -276,14 +276,6 @@ class DataTiler(BaseClass):
                 self.write_da_to_raster(weights_da, f"{image.name}_edges.tif", tmp_dir)
 
         return mask_da, weights_da
-
-    def save_tile_shapefile(self, labels, tile_geom, shp_name):
-        "Save a clipped version of self.labels containing only the polygons of a given tile."
-        clipped_labels = gpd.clip(labels, tile_geom)
-        clipped_labels = clipped_labels[clipped_labels.geometry.type == "Polygon"]
-        # Save clipped labels as a shapefile
-        clipped_labels_path = self.label_tiles_dir / shp_name
-        clipped_labels.to_file(clipped_labels_path)
 
     def generate_tiles(self, tile_size=0, write_tmp_files=False):
         """

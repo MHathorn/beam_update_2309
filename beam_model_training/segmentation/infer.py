@@ -52,7 +52,7 @@ class MapGenerator(BaseClass):
 
     Methods
     -------
-    create_shp_from_mask(file, mask_array):
+    create_shp_from_mask(mask_array):
         Creates a shapefile from a binary mask array and saves it to disk.
     create_tile_inferences():
         Performs inference on each tile in the images directory and saves the results.
@@ -276,14 +276,16 @@ class MapGenerator(BaseClass):
             output_files, settlements, primary_key
         )
         gdfs = []
-        for (pkey, _), names in grouped_tiles.items():
+        components_list = list(grouped_tiles.items())
+
+        for (pkey, _), names in tqdm(components_list, desc="Progressing"):
             # Filter the data arrays by name in output_files
             settlement_tiles = [da for da in output_files if da.name in names]
 
             combined = merge_arrays(settlement_tiles)
             combined.name = pkey
 
-            gdf = self.create_shp_from_mask(combined, primary_key)
+            gdf = self.create_shp_from_mask(combined)
             gdfs.append(gdf)
         all_buildings = gpd.GeoDataFrame(
             pd.concat(gdfs), geometry="geometry", crs=self.crs
@@ -329,10 +331,10 @@ class MapGenerator(BaseClass):
                 f"Found {len(preds)} predictions in directory {self.predictions_dir}. Loading.. "
             )
             output_files = []
-            for file in output_files:
+            for file in self.predictions_dir.iterdir():
                 img = rxr.open_rasterio(file)
-                if file.name is None:
-                    file.name = file.long_name
+                if img.name is None:
+                    img.name = img.long_name
                 output_files.append(img)
             
         else:
@@ -342,9 +344,9 @@ class MapGenerator(BaseClass):
                 self.test_images_dir if images_dir is None else Path(images_dir)
             )
             image_files = list(
-                images_dir.glob("*.tif")
+                images_dir.glob("*.TIF")
                 ) + list(
-                    images_dir.glob("*.tiff")
+                    images_dir.glob("*.TIFF")
                     )
             logging.info(
                 f"Found {len(image_files)} image files in directory {images_dir}. "
@@ -379,7 +381,8 @@ class MapGenerator(BaseClass):
             logging.info(f"Inference completed for {len(output_files)} tiles.")
 
         if len(output_files) == 0:
-            print("")
+            print("Did not find any overlapping tiles. Ending process.")
+            return
         if settlements is not None:
             if settlements.crs != self.crs:
                 settlements = settlements.to_crs(self.crs)
