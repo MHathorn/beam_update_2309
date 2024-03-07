@@ -18,24 +18,26 @@ from utils.helpers import get_tile_size, load_config, seed, timestamp
 
 
 class Trainer(BaseClass):
+    """
+    Trainer class responsible for setting up and training segmentation models.
+
+    The class handles loading configuration settings, initializing data transformations,
+    preparing dataloaders, and running the training process. It supports different architectures
+    such as U-Net and HRNet, and allows for various customizations through the config parameters.
+    """
+
     def __init__(self, config):
         """
         Initialize the Trainer class with configuration settings.
 
         Args:
-            config (dict): Configuration settings. Contains the following keys:
-                - root_dir (str): The root directory containing all training files.
-                - erosion (bool): Whether erosion has been applied to building labels in preprocessing.
+            config (dict): Configuration settings, which must include:
+                - root_dir (str): Root directory containing all training files.
                 - seed (int): Seed for random number generator.
-                - codes (list): List of unique codes.
-                - tile_size (int): Size of each image tile.
+                - codes (list): List of unique codes representing classes.
                 - test_size (float): Proportion of data to be used for testing.
-                - train (dict): Training parameters. Contains the following keys:
-                    - architecture (str): Architecture of the model.
-                    - backbone (str): Backbone of the model.
-                    - epochs (int): Number of epochs for training.
-                    - loss_function (str): Loss function for training.
-                    - batch_size (int): Batch size for training.
+                - tiling (dict): Contains 'distance_weighting' and 'erosion' keys indicating whether distance weighting or erosion preprocessing has been applied.
+                - train (dict): Training parameters including architecture, backbone, epochs, loss function, batch size, pretrained flag, and early stopping flag.
         """
 
         # Load and initialize random seed
@@ -49,7 +51,7 @@ class Trainer(BaseClass):
         super().__init__(config, read_dirs=training_dirs)
 
         # Load learning arguments
-        self.load_train_params(config)
+        self._load_train_params(config)
         self.p2c_map = self._map_unique_classes()
 
         if self.train_params["pretrained"]:
@@ -66,15 +68,16 @@ class Trainer(BaseClass):
         params_keys = ["seed", "codes", "test_size", "root_dir"]
         tile_params_keys = ["distance_weighting", "erosion"]
         try:
-            self.params = dict((k, config[k]) for k in params_keys)
-            self.params.update(dict((k, config["tiling"][k]) for k in tile_params_keys))
+            self.params = {k: config[k] for k in params_keys}
+            self.params.update({k: config["tiling"][k] for k in tile_params_keys})
         except KeyError as e:
             raise KeyError(f"Config must have a value for {e} to run the Trainer.")
 
         if self.params["test_size"] < 0 or self.params["test_size"] > 1:
             raise ValueError("Test size must be a float between 0 and 1.")
 
-    def load_train_params(self, config):
+    def _load_train_params(self, config):
+        """Loads parameters specific to training."""
         train_keys = [
             "architecture",
             "backbone",
@@ -135,6 +138,7 @@ class Trainer(BaseClass):
         mask = mask.values.reshape((mask.shape[1], mask.shape[2]))
         mask = PILMask.create(mask)
 
+        # Bundle mask and weights for training with distance weighting 
         if self.params["distance_weighting"]:
             weights_path = str(image_path).replace("images", "weights")
             weights = PILMask.create(weights_path)
@@ -180,10 +184,10 @@ class Trainer(BaseClass):
 
     def _callbacks(self):
         """
-        Log results in CSV, show progress in graph.
+        Create a list of callbacks for training.
 
         Returns:
-            list: List of callbacks.
+            list: List of callbacks including CSVLogger, ShowGraphCallback, TensorBoardCallback (if using U-Net), and EarlyStoppingCallback (if enabled).
         """
         csv_path = str(self.run_dir / "train_metrics.csv")
         tb_dir = str(self.run_dir / "tb_logs/")
@@ -211,16 +215,13 @@ class Trainer(BaseClass):
 
     def check_dataset_balance(self, sample_size=50):
         """
-        This function checks the balance of the dataset by calculating the ratio of pixels that belong to buildings in each image.
-        It then plots a histogram of these ratios for a sample of images and saves this plot in the 'models' directory.
-        It also prints the mean percentage of pixels belonging to buildings across the sampled images.
+        This function checks the balance of the dataset by calculating the ratio of pixels that belong to buildings in each image and plotting the histogram.
 
         Args:
-            dls: DataLoader containing the images and masks.
             sample_size: Number of images to sample from the DataLoader.
 
         Returns:
-            Tensor: Percentages of pixels that belong to buildings in each sampled image.
+            list: Percentages of pixels that belong to buildings in each sampled image.
         """
 
         mask_files = get_image_files(self.train_masks_dir)
@@ -250,7 +251,12 @@ class Trainer(BaseClass):
         return percentages
 
     def setup_data_transforms(self):
-        """Set up data transformations."""
+        """
+        Set up data transformations for training.
+
+        Returns:
+            list: List of data augmentation transforms to be applied.
+        """
         tfms = [
             *aug_transforms(
                 mult=1.0,
@@ -273,7 +279,15 @@ class Trainer(BaseClass):
         return tfms
 
     def prepare_dataloaders(self, tfms):
-        """Prepare dataloaders for training and validation."""
+        """
+        Prepare dataloaders for training and validation.
+
+        Args:
+            tfms (list): List of data transformations to apply.
+
+        Returns:
+            DataLoaders: Dataloaders used for segmentation.
+        """
         image_files = get_image_files(self.train_images_dir)
         assert (
             len(image_files) > 0
@@ -308,8 +322,7 @@ class Trainer(BaseClass):
         It applies image augmentations, creates dataloaders, sets up the model, and finally trains it.
 
         Returns:
-            Learner: Trained model.
-            Dataloaders: Dataloaders used for segmentation.
+            str: Path to the saved trained model.
         """
         self.model_name = f"{self.train_params['architecture']}_{timestamp()}"
         self.run_dir = BaseClass.create_if_not_exists(self.models_dir / self.model_name)
@@ -370,7 +383,12 @@ class Trainer(BaseClass):
         return model_path
 
     def _save(self):
+        """
+        Save the trained model and its parameters to disk.
 
+        Returns:
+            str: Path to the saved trained model.
+        """
         model_path = str((self.run_dir / self.model_name).with_suffix(".pkl"))
         self.learner.export(model_path)
 

@@ -3,6 +3,17 @@ import shutil
 
 
 class BaseClass:
+    """
+    BaseClass is a utility class for managing directory structures throughout the codebase.
+    
+    It provides methods to set up directories based on the configuration file, and ensures that
+    the required directories exist or are created as needed. It also supports loading model paths
+    from specified directories.
+
+    Attributes:
+        DIR_STRUCTURE (dict): A class attribute that defines the standard directory structure.
+    """
+
 
     DIR_STRUCTURE = {
         "images": "images",
@@ -10,7 +21,6 @@ class BaseClass:
         "pretrained": "pretrained",
         "image_tiles": "tiles/images",
         "mask_tiles": "tiles/masks",
-        "label_tiles": "tiles/labels",
         "weight_tiles": "tiles/weights",
         "models": "models",
         "train_images": "tiles/train/images",
@@ -25,13 +35,30 @@ class BaseClass:
     }
 
     def __init__(self, config, read_dirs=[], write_dirs=[]):
-        # self.load_params(config)
+        """
+        Initializes the BaseClass with the given configuration.
+
+        Parameters:
+            config (dict): Configuration dictionary containing at least the 'root_dir' key.
+            read_dirs (list): List of directory keys to be read from.
+            write_dirs (list): List of directory keys to write in. Those directories will be overwritten if files already exist in them.
+        """
         self.load_dir_structure(config, read_dirs, write_dirs)
 
-    def load_params(self, config):
-        pass
-
     def load_dir_structure(self, config, read_dirs, write_dirs):
+        """
+        Loads the directory structure based on the provided configuration, read_dirs, and write_dirs.
+
+        It sets attributes for each directory path after ensuring they exist or creating them if necessary.
+
+        Parameters:
+            config (dict): Configuration dictionary containing at least the 'root_dir' key.
+            read_dirs (list): List of directory keys to be read from.
+            write_dirs (list): List of directory keys to write in. Those directories will be overwritten if files already exist in them.
+
+        Raises:
+            KeyError: If a directory key is not registered in DIR_STRUCTURE.
+        """
         path = Path(config["root_dir"])
         all_dirs = set(read_dirs + write_dirs)
         for dir_name in all_dirs:
@@ -47,9 +74,22 @@ class BaseClass:
             )
 
     def load_model_path(self, config, pretrained=False):
+        """
+        Loads the path to the model file, either as pretrained model, or as a model to be evaluated.
+
+        Parameters:
+            config (dict): Configuration dictionary containing at least the 'root_dir' and 'model_version' keys.
+            pretrained (bool): Flag indicating whether to load a pretrained model.
+
+        Returns:
+            PosixPath: The path to the model pickle file.
+
+        Raises:
+            ValueError: If the model directory does not exist or does not contain exactly one pickle file.
+        """
         model_version = config["model_version"]
         if pretrained:
-            model_version_dir = Path(config["root_dir"]) / self.DIR_STRUCTURE["pretrained"]
+            model_version_dir = Path(config["root_dir"]) / self.DIR_STRUCTURE["pretrained"] / model_version
             pickle_files = list(model_version_dir.glob(f"{model_version}*"))
         else:
             model_version_dir = self.models_dir / model_version

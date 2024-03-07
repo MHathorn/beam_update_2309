@@ -31,32 +31,27 @@ class MapGenerator(BaseClass):
 
     ...
 
-    Parameters
+    Attributes
     ----------
-    config: dict
-        - root_dir : str
-        The root directory containing all training files.
-            - images : str
-            The directory where the image tiles are stored.
-            - shapefiles : str
-            The directory where the shapefiles will be saved.
-            - predictions : str
-            The directory where the prediction files will be saved.
-            - models : str
-            The directory where model checkpoints are saved.
-        - erosion : bool
-        Whether erosion has been applied to building labels in preprocessing.
-        - test: dict
-            - model_name : PyTorch model
-            The trained model used for inference.
-
+    config : dict
+        Configuration dictionary specifying paths and model details.
+    generate_preds : bool
+        Flag indicating whether predictions should be generated during evaluation.
+    
     Methods
     -------
-    create_shp_from_mask(mask_array):
-        Creates a shapefile from a binary mask array and saves it to disk.
-    create_tile_inferences():
-        Performs inference on each tile in the images directory and saves the results.
+    create_shp_from_mask(mask_da):
+        Creates a GeoDataFrame from a binary mask DataArray.
+    group_tiles_by_connected_area(mask_tiles, settlements, primary_key):
+        Groups tiles by connected area for vectorization.
+    single_tile_inference(image_file, AOI_gpd=None, write_shp=True):
+        Processes a single image file for inference and optionally writes output as shapefile.
+    filter_by_areas(output_files, settlements, primary_key):
+        Filters and merges rasters by settlement areas.
+    create_tile_inferences(images_dir=None, settlements=None, primary_key=""):
+        Performs inference on each tile in the images directory and optionally merges the results to match a settlement boundaries shapefile.
     """
+
 
     def __init__(self, config, generate_preds=False):
         """
@@ -66,11 +61,14 @@ class MapGenerator(BaseClass):
         ----------
             config : dict
                 Configuration dictionary containing paths and inference arguments.
+            generate_preds : bool
+                Flag indicating whether predictions should be generated during evaluation.
+    
         """
         read_dirs = ["test_images", "models"]
         prediction_dirs = ["predictions", "shapefiles"]
         self.generate_preds = generate_preds
-        if generate_preds:
+        if self.generate_preds:
             super().__init__(config, read_dirs=read_dirs, write_dirs=prediction_dirs)
         else:
             super().__init__(config, read_dirs=(read_dirs + prediction_dirs))
@@ -92,19 +90,17 @@ class MapGenerator(BaseClass):
 
     def create_shp_from_mask(self, mask_da):
         """
-        Creates a GeoDataFrame from a binary mask array.
-        The function first dilates the mask with a 3x3 square kernel, which
-        is the inverse of the erosion applied in preprocessing. Then, it uses the `rasterio.features.shapes` function to
-        extract the shapes of the connected regions of the mask.
+        Creates a GeoDataFrame from a binary mask DataArray.
 
         Parameters
         ----------
-            mask_array : numpy.ndarray
-                Binary mask array of the same size as the original image.
+        mask_da : xr.DataArray
+            Binary mask DataArray of the same size as the original image with named dimensions and coordinates.
+
         Returns
         -------
-            gdf: geopandas.GeoDataFrame
-                GeoDataFrame representing the shapes extracted from the mask.
+        gdf : gpd.GeoDataFrame
+            GeoDataFrame representing the shapes extracted from the mask.
         """
 
         if not isinstance(mask_da, xr.DataArray) or mask_da.name is None:
@@ -143,14 +139,19 @@ class MapGenerator(BaseClass):
         """
         Groups tiles by area covered by a connected group of tiles, from which building polygons will be extracted at once.
 
-        Parameters:
-        mask_tiles (list): A list of rasterio dataset objects representing tiles.
-        settlements (GeoDataFrame): A GeoDataFrame containing settlement data. Each row represents a settlement with a geometry column for its spatial representation.
-        primary_key (str): The name of the column in the settlements GeoDataFrame to use as the primary key.
+        Parameters
+        ----------
+        mask_tiles : list
+            A list of rasterio dataset objects representing tiles.
+        settlements : gpd.GeoDataFrame
+            A GeoDataFrame containing settlement data. Each row represents a settlement with a geometry column for its polygon boundaries.
+        primary_key : str
+            The name of the column in the settlements GeoDataFrame to use as primary key.
 
-        Returns:
-        grouped_tiles (Series): A pandas Series where each entry is a list of tile names associated with a merged settlement group. The index of the Series is a MultiIndex with levels [f'{primary_key}_group', 'geometry'].
-
+        Returns
+        -------
+        grouped_tiles : pd.Series
+            A pandas Series where each entry is a list of tile names associated with a merged settlement group. The index of the Series is a MultiIndex with levels [f'{primary_key}_group', 'geometry'].
         """
         # Create a GeoDataFrame from the list of tiles
         data = [{"name": da.name, "geometry": box(*da.rio.bounds())} for da in mask_tiles]
@@ -202,14 +203,21 @@ class MapGenerator(BaseClass):
 
     def single_tile_inference(self, image_file, AOI_gpd=None, write_shp=True):
         """
-        Process a single image file for inference.
-        Parameters:
-        - image_file (str): Path to the image file.
-        - AOI_gpd (GeoDataFrame): Area of Interest as a GeoPandas DataFrame.
+        Processes a single image file for inference and optionally writes a shapefile.
 
-        This function opens the image file, checks if it is within the Area of Interest if exists,
-        runs inference on the image, normalizes the output, saves the output as a new
-        GeoTIFF file, and generates a shapefile from the output mask.
+        Parameters
+        ----------
+        image_file : str or Path
+            Path to the image file.
+        AOI_gpd : gpd.GeoDataFrame, optional
+            Area of Interest as a GeoPandas DataFrame (default: None).
+        write_shp : bool, optional
+            Whether to write the output to a shapefile (default: True).
+
+        Returns
+        -------
+        output_da : xarray.DataArray
+            Geospatial data array with inference results.
         """
         tile = get_rgb_channels(image_file)
         if tile.rio.crs != self.crs:
@@ -257,19 +265,21 @@ class MapGenerator(BaseClass):
 
     def filter_by_areas(self, output_files, settlements, primary_key):
         """
-        Filters geospatial data arrays by settlement areas and merges them into a single GeoDataFrame.
+        Filters and merges geospatial data arrays by settlement areas.
 
-        Groups and merges tiles based on settlement boundaries, applies a mask to retain data
-        within these boundaries, and enriches the resulting GeoDataFrame with attributes from `settlements`.
+        Parameters
+        ----------
+        output_files : list of xarray.DataArray
+            Geospatial data arrays with a 'name' attribute.
+        settlements : gpd.GeoDataFrame
+            Settlement areas with geometries and attributes.
+        primary_key : str
+            Column in `settlements` for unique settlement identification.
 
-        Parameters:
-        - output_files (list of xarray.DataArray): Geospatial data arrays with a 'name' attribute.
-        - settlements (geopandas.GeoDataFrame): Settlement areas with geometries and attributes.
-        - primary_key (str): Column in `settlements` for unique settlement identification.
-
-        Returns:
-        - geopandas.GeoDataFrame: Merged and masked geospatial data for each settlement, enriched with
-        settlement attributes.
+        Returns
+        -------
+        filtered_buildings : gpd.GeoDataFrame
+            Merged and masked geospatial data for each settlement, enriched with settlement attributes.
         """
          
         grouped_tiles = self.group_tiles_by_connected_area(
@@ -302,27 +312,22 @@ class MapGenerator(BaseClass):
         Parameters
         ----------
         images_dir : str or Path, optional
-            The directory containing the image tiles. If not provided, the default test_images_dir will be used.
-        AOI_gpd : geopandas.GeoDataFrame, optional
-            A GeoDataFrame representing the Area of Interest (AOI). If not provided, all tiles in the images_dir will be processed.
-        merge_outputs : bool, optional
-            If True, the outputs from each tile will be merged into a single output. If False, each tile's output will be kept separate.
-
-        Returns
-        -------
-        None
+            The directory containing the image tiles. If not provided, the default test_images_dir will be used (default: None).
+        settlements : geopandas.GeoDataFrame, optional
+            A GeoDataFrame representing the Area of Interest (AOI). If not provided, all tiles in the images_dir will be processed (default: None).
+        primary_key : str, optional
+            The primary key to use when merging outputs (default: "").
 
         Notes
         -----
-        This function saves the inference results to disk. If merge_outputs is True, the results are grouped by settlement before being saved.
+        This function saves the inference results to disk. If settlements are provided, the results are grouped by settlement before being saved.
         """
         
         
-
-        if self.crs is None and images_dir:
-            self.crs = self.get_crs(images_dir)
-        elif self.crs is None and images_dir is None:
-            raise rxr.exceptions.MissingCRS("CRS could not be set. Please provide a valid images directory.")
+        images_dir = Path(images_dir or self.test_images_dir)
+        self.crs = self.crs or self.get_crs(images_dir)
+        if self.crs is None:
+            raise rxr.exceptions.MissingCRS("CRS could not be set. Please provide a valid images directory for CRS assignment.")
         
         output_files = []
         if not self.generate_preds and any(self.predictions_dir.iterdir()):
@@ -330,8 +335,7 @@ class MapGenerator(BaseClass):
             logging.info(
                 f"Found {len(preds)} predictions in directory {self.predictions_dir}. Loading.. "
             )
-            output_files = []
-            for file in self.predictions_dir.iterdir():
+            for file in preds:
                 img = rxr.open_rasterio(file)
                 if img.name is None:
                     img.name = img.long_name
@@ -339,10 +343,6 @@ class MapGenerator(BaseClass):
             
         else:
 
-            logging.info("Starting tile inferences...")
-            images_dir = (
-                self.test_images_dir if images_dir is None else Path(images_dir)
-            )
             image_files = list(
                 images_dir.glob("*.TIF")
                 ) + list(
@@ -351,19 +351,16 @@ class MapGenerator(BaseClass):
             logging.info(
                 f"Found {len(image_files)} image files in directory {images_dir}. "
             )
-            write_shp = True if settlements is None else False
+            write_shp = settlements is None
             
             # for image in tqdm(image_files):
             #     output_da = self.single_tile_inference(image, settlements, write_shp)
             #     if output_da is not None:
             #         output_files.append(output_da)
             with ProcessPoolExecutor() as executor:
-                futures = {executor.submit(self.single_tile_inference, image_file, settlements, write_shp) for image_file in image_files}
+                futures = [executor.submit(self.single_tile_inference, image_file, settlements, write_shp) for image_file in image_files]
                 
-                # Create a progress bar
-                progress_bar = tqdm(total=len(futures), desc="Processing", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
-                
-                for future in as_completed(futures):
+                for future in tqdm(as_completed(futures), total=len(futures), desc="Progressing"):
                     try:
                         result = future.result()
                     except Exception as e:
@@ -372,12 +369,6 @@ class MapGenerator(BaseClass):
                     if result is not None:
                         output_files.append(result)
                     
-                    # Update the progress bar
-                    progress_bar.update(1)
-
-                # Close the progress bar
-                progress_bar.close()
-
             logging.info(f"Inference completed for {len(output_files)} tiles.")
 
         if len(output_files) == 0:

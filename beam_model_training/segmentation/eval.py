@@ -19,8 +19,13 @@ class Evaluator(BaseClass):
     """
     A class used to evaluate the performance of a segmentation model.
 
-    ...
-
+    Attributes
+    ----------
+    config : dict
+        Configuration dictionary specifying paths and model details.
+    generate_preds : bool
+        Flag indicating whether predictions should be generated during evaluation.
+    
     Methods
     -------
     overlay_shapefiles_on_images(n_images, show=False):
@@ -31,21 +36,19 @@ class Evaluator(BaseClass):
         Generates predictions, overlays them on images, computes metrics, and saves the results.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, generate_preds=True):
         """
         Constructs all the necessary attributes for the Evaluator object.
 
         Parameters
         ----------
-            config : dict
-                - root_dir: Path to the root directory containing model and dataset.
-                - test:
-                 - model_name: The name of the model stored in the models directory.
+        config : dict
+            Configuration dictionary specifying paths and model details.
         """
 
         self.config = config
         self.model_version = config["model_version"]
-        self.generate_preds = True
+        self.generate_preds = generate_preds
         read_dirs = ["test_images", "test_masks", "models", "eval"]
         write_dirs = []
         if self.generate_preds:
@@ -123,12 +126,18 @@ class Evaluator(BaseClass):
         """
         Computes precision, recall, accuracy, dice coefficient, and IoU for the model's predictions.
 
+        Parameters
+        ----------
+        map_gen : MapGenerator
+            An instance of MapGenerator to convert masks to shapefiles.
+        iou_threshold : float, optional
+            The IoU threshold to consider when calculating building-level precision and recall (default: 0.5).
+
         Returns
         -------
-            pd.DataFrame
-                A dataframe containing the computed metrics.
+        pd.DataFrame
+            A dataframe containing the computed metrics.
         """
-
         def calculate_building_iou(poly1, poly2):
             intersection = poly1.intersection(poly2).area
             union = poly1.union(poly2).area
@@ -216,13 +225,14 @@ class Evaluator(BaseClass):
 
     def evaluate(self, n_images=10, iou_threshold=0.5):
         """
-        Generates predictions, overlays them on images, computes metrics, and saves the results.
+        Generates predictions if required, overlays them on images, computes metrics, and saves the results.
 
         Parameters
         ----------
-            n_images : int, optional
-                Number of overlays to generate (default: 10).
-
+        n_images : int, optional
+            Number of overlays to generate (default: 10).
+        iou_threshold : float, optional
+            The IoU threshold to consider when calculating building-level precision and recall (default: 0.5).
         """
         if self.generate_preds:
             map_gen = MapGenerator(self.config, generate_preds=True)

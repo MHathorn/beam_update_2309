@@ -8,6 +8,12 @@ from utils.base_class import BaseClass
 
 
 class AddWeightsToTargets(Transform):
+    """
+    A Transform that stacks a mask with its corresponding weights as channels.
+
+    Attributes:
+        weights_dir (Path): Directory containing weight files.
+    """
     def __init__(self, weights_dir):
         self.weights_dir = Path(weights_dir)
 
@@ -55,22 +61,23 @@ def calculate_average_confidence(buildings, tile_geom):
 
 def gen_train_test(root_dir, test_size=0.2, seed=2022, distance_weighting=False):
     """
-    Splits image and mask files into training and testing sets and moves the testing files to specified directories.
+    Splits image and mask files into training and testing sets based on the specified test size and seed,
+    and moves the testing files to separate directories.
 
-    Parameters:
-    root_dir (str): The directory containing all project tiles.
-    dir_structure (dict): Dictionary representing the relative file structure. It should include the following entries:
-      - image_tiles: Directory containing all image tiles.
-      - mask_tiles: Directory containing all mask_tiles.
-      - train: Train files directory.
-      - test: Test files directory.
-    test_size (float, optional): The proportion of the dataset to include in the test split. Default is 0.2.
+    Args:
+        root_dir (str or Path): The directory containing all project tiles.
+        test_size (float, optional): The proportion of the dataset to include in the test split. Defaults to 0.2.
+        seed (int, optional): The random seed used for splitting the data. Defaults to 2022.
+        distance_weighting (bool, optional): Whether to include distance weighting files in the split. Defaults to False.
+
+    Raises:
+        IOError: If the images directory does not exist or a corresponding mask/weight file is missing.
 
     Returns:
-    None
+        None: This function performs file operations and does not return any value.
 
     Note:
-    This function expects mask_files match the name of an image f ile.
+        This function expects mask and weight files to match the name of an image file.
     """
     root_dir = Path(root_dir)
     images_dir = root_dir / BaseClass.DIR_STRUCTURE["image_tiles"]

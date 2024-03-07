@@ -19,34 +19,45 @@ from utils.base_class import BaseClass
 
 
 class DataTiler(BaseClass):
-    """Data Tiler class. This class loads from the configuration file an image directory,
-    tile size, and tiles directory, and populates the tile directory with image
-    tiles ready for data augmentation and train-test split.
+    """
+    Data Tiler class that processes geospatial imagery and labels into tiles.
 
-    Expected configuration attributes:
-    ├── input_dir
-    │ ├── images // A list of files in GeoTIFF format.
-    │ │ ├── image.tiff
-    │ ├── labels // A shapefile or csv file (in Google Open Buildings Dataset format) containing all labels
-                    for the included images.
-    │ │ ├── label.shp (optional)
-    If labels are presents in the directry, mask tiles will be created as well.
+    This class is responsible for loading images and optional label data, generating
+    mask and weight tiles if required, and saving these tiles for further processing.
 
+    Attributes:
+        root_dir (Path): The project directory containing all training files.
+        crs (CRS): Coordinate Reference System of the input images.
+        spatial_resolution (float): Spatial resolution of the images.
+        tiling_params (dict): Parameters related to tiling such as distance weighting,
+                              whether to tile labels, erosion, and tile size.
 
-    Expected configuration attributes:
-    - root_dir: Name of the project directory containing all training files.
-    - tile_size: Size of the output tiles.
-    - erosion: true if erosion should be applied to the labels.
+    Methods:
+        load_tiling_params: Loads tiling parameters from the configuration.
+        load_images: Loads GeoTIFF images from a specified directory.
+        load_labels: Loads building footprints from vector files into a GeoDataFrame.
+        crop_labels: Crops labels based on the bounding box of an input image.
+        write_da_to_raster: Writes a DataArray to a raster file in TIFF format.
+        generate_mask: Generates a binary mask from vector labels.
+        generate_tiles: Tiles images and masks, and stores them as TIFF files.
 
     Usage:
-    img_tiler = DataTiler(config)
-    img_tiler.generate_tiles(tile_size)
+        img_tiler = DataTiler(config)
+        img_tiler.generate_tiles(tile_size)
 
     Expected output:
-    Tiles saved in new sub-directory `image_tiles` and `mask_tiles` (if labels file provided).
+        Tiles saved in sub-directories `image_tiles`, `mask_tiles` (if labels provided),
+        and `weight_tiles` (if distance weighting is enabled).
     """
 
     def __init__(self, config):
+        """
+        Initializes the DataTiler with configuration settings.
+
+        Args:
+            config (dict): Configuration settings including root directory, tiling parameters,
+                           and directories for images and labels.
+        """
 
         self.root_dir = Path(config["root_dir"])
         self.crs = None
@@ -88,19 +99,29 @@ class DataTiler(BaseClass):
         super().__init__(config, write_dirs=write_dirs)
 
     def load_tiling_params(self, config):
+        """
+        Loads tiling parameters from the configuration dictionary.
+
+        Args:
+            config (dict): Configuration dictionary containing tiling parameters.
+
+        Returns:
+            dict: Dictionary containing tiling parameters such as distance weighting,
+                  whether to tile labels, erosion, and tile size.
+        """
         tiling_keys = ["distance_weighting", "tile_labels", "erosion", "tile_size"]
         return {k: config["tiling"].get(k) for k in tiling_keys}
 
     def load_images(self, image_dir):
         """
-        Loads all GeoTIFF images in the provided image_dir with rioxarray.
+        Loads all GeoTIFF images in the provided directory using rioxarray.
 
-        Parameters:
-        image_dir: Images directory.
+        Args:
+            image_dir (Path): Directory containing GeoTIFF images.
+
         Yields:
-        xarray.DataArray: Single band from a GeoTIFF image.
+            DataArray: Single band from a GeoTIFF image as an xarray DataArray.
         """
-
         filepaths = [
             img_path
             for img_path in image_dir.rglob("*")
@@ -118,18 +139,16 @@ class DataTiler(BaseClass):
 
     def load_labels(self, labels_files):
         """
-        This loads building footprints from one or more vector files
-        and stores them as an instance attribute.
+        Crops labels based on the bounding box of the input image.
 
-        Parameters:
-        labels_files: Path to labels file, in .csv, .shp or .csv.gz format.
-        crop: True if labels datafame should be adapted to the size of the images dataset.
+        Args:
+            image (DataArray): The input image whose bounding box will be used to crop the labels.
 
         Returns:
-        GeoDataFrame: A geo dataframe containing all building labels.
+            GeoDataFrame: A GeoDataFrame cropped to the image boundaries.
         """
 
-        def load_from_gob(csv_path):
+        def _load_from_gob(csv_path):
             """
             Loading function from Google Open Buildings dataset.
             Expected format: CSV.
@@ -144,12 +163,12 @@ class DataTiler(BaseClass):
         for labels_path in labels_files:
             print(f"Loading label file {labels_path.name}..")
             if labels_path.suffix.lower() == ".csv":
-                df = load_from_gob(labels_path)
+                df = _load_from_gob(labels_path)
 
             elif labels_path.name.endswith(".csv.gz"):
                 # Unzip the .gz file and read it as csv
                 with gzip.open(labels_path, "rt") as f:
-                    df = load_from_gob(f)
+                    df = _load_from_gob(f)
 
             # Load from shapefile
             elif labels_path.suffix.lower() == ".shp":
@@ -165,13 +184,13 @@ class DataTiler(BaseClass):
 
     def crop_labels(self, image):
         """
-        This method crops labels based on the bounding box of the input image.
+        Crops labels based on the bounding box of the input image.
 
-        Parameters:
-        image: The input image whose bounding box will be used to crop the labels.
+        Args:
+            image (DataArray): The input image whose bounding box will be used to crop the labels.
 
         Returns:
-        GeoDataFrame: GeoDataFrame cropped to the image boundaries.
+            GeoDataFrame: A GeoDataFrame cropped to the image boundaries.
         """
 
         bounding_box = box(*image.rio.bounds())
@@ -180,19 +199,32 @@ class DataTiler(BaseClass):
         return self.labels[self.labels.intersects(union_bounding_box)]
 
     def write_da_to_raster(self, data, name, directory):
-        """Write data array to raster file in tiff format."""
+        """
+        Writes a DataArray to a raster file in TIFF format.
+
+        Args:
+            data (DataArray): The data array to write to file.
+            name (str): The name of the output file.
+            directory (Path): The directory where the output file will be saved.
+        """
         data_path = directory / name
         data.rio.to_raster(data_path)
 
     def generate_mask(self, image, labels, write=False):
         """
-        Generate a binary mask from a vector file (shp or geojson).
+        Generates a binary mask from vector labels and optionally writes it to disk.
 
         Polygons are created from the vector labels. The mask is then created and
-        eroded with a 3x3 kernel.
+        eroded with a 3x3 kernel if erosion is enabled. Distance weights are calculated
+        if distance weighting is enabled.
+
+        Args:
+            image (DataArray): The image associated with the labels.
+            labels (GeoDataFrame): The labels used to generate the mask.
+            write (bool): If True, the generated mask and weights are written to disk.
 
         Returns:
-        numpy.ndarray: The generated mask, if 'write' is False. Otherwise, None.
+            tuple: A tuple containing the mask and weights as DataArrays.
         """
 
         # Generate the mask
@@ -233,9 +265,6 @@ class DataTiler(BaseClass):
         image_size = (image.shape[1], image.shape[2])
         transform = image.rio.transform()
 
-        # if self.tiling_params["erosion"]:
-        #     labels['geometry'] = labels['geometry'].buffer(-spatial_resolution * 1)
-
         label_polygons = sum(
             labels["geometry"].apply(poly_from_utm, args=(transform,)), []
         )  # converting all to lists of polygons, then concatenating.
@@ -250,10 +279,12 @@ class DataTiler(BaseClass):
                 dtype="uint8",
             )
 
+            # Eroding masks, as proposed in https://arxiv.org/abs/2107.12283
             if self.tiling_params["erosion"]:
                 kernel = np.ones((3, 3), np.uint8)
                 mask = erode(mask, kernel, iterations=1)
 
+            # Generating gaussian weights, as proposed in https://arxiv.org/abs/2107.12283
             if self.tiling_params["distance_weighting"]:
                 edge_polygons = [poly.boundary for poly in label_polygons]
                 weights = rasterize(
@@ -279,15 +310,15 @@ class DataTiler(BaseClass):
 
     def generate_tiles(self, tile_size=0, write_tmp_files=False):
         """
-        This method tiles both images and masks (if any) and stores them as .tif files.
+        Tiles both images and masks (if any) and stores them as TIFF files.
 
-        The tiled images are saved in the 'image_tiles' directory and the tiled masks (if any) are saved in the 'mask_tiles' directory.
-        The naming convention for the tiled images and masks is '{original_file_name}_r{row_index}_c{column_index}.png'.
+        The tiled images are saved in the 'image_tiles' directory and the tiled masks
+        (if any) are saved in the 'mask_tiles' directory. Optionally, weight tiles are
+        saved in the 'weight_tiles' directory if distance weighting is enabled.
 
-        Parameters:
-        tile_size: Size of the output tiles.
-        write_tmp_files: True if the mask should be stored before tiling.
-
+        Args:
+            tile_size (int): Size of the output tiles. If 0, uses the size from tiling_params.
+            write_tmp_files (bool): If True, intermediate mask files are stored before tiling.
         """
 
         if tile_size == 0:
@@ -309,13 +340,13 @@ class DataTiler(BaseClass):
             # Prepare labels for training.
             if self.labels is not None:
                 labels = self.crop_labels(image)
-                if not labels.empty:
-                    mask, weights = self.generate_mask(image, labels, write_tmp_files)
-                else:
+                if labels.empty:
                     print(
                         f"No intersecting labels found for {image.name}. Skipping image."
                     )
                     continue
+                mask, weights = self.generate_mask(image, labels, write_tmp_files)
+                    
 
             x_tiles = image.sizes["x"] // tile_size
             y_tiles = image.sizes["y"] // tile_size
@@ -339,7 +370,6 @@ class DataTiler(BaseClass):
                         x=slice(i * tile_size, (i + 1) * tile_size),
                         y=slice(j * tile_size, (j + 1) * tile_size),
                     )
-                    tile_geom = box(*img_tile.rio.bounds())
                     self.write_da_to_raster(img_tile, tile_name, self.image_tiles_dir)
 
                     if self.labels is not None:
@@ -362,6 +392,7 @@ class DataTiler(BaseClass):
 
                         # Save labels in the appropriate folder.
                         if self.tiling_params["tile_labels"]:
+                            tile_geom = box(*img_tile.rio.bounds())
                             self.save_tile_shapefile(labels, tile_geom, tile_name)
                     pbar.update(1)
             pbar.close()

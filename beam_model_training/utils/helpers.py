@@ -51,7 +51,7 @@ def load_config(config_name):
 
 
 def timestamp():
-    """Timestamp for conducting experiments"""
+    """Timestamp for tracking experiments."""
     tz = pytz.timezone("Europe/Berlin")
     now = datetime.now(tz)
     date_time = now.strftime("%Y%m%d-%H%M")
@@ -128,6 +128,13 @@ def get_rgb_channels(input_data):
 
 
 def multiband_to_png(file_path, output_dir):
+    """
+    Converts a multiband TIFF file to a PNG file and saves it to the specified output directory.
+
+    Parameters:
+        file_path (str|PosixPath): The path to the input TIFF file.
+        output_dir (PosixPath): The directory where the output PNG file will be saved.
+    """
     tiff_file = Path(file_path)
     png_file = output_dir / tiff_file.with_suffix(".png").name
 
@@ -141,6 +148,7 @@ def multiband_to_png(file_path, output_dir):
 
 
 def get_tile_size(image_path):
+    "Get the size o a tile from an image file."
     img = PILImage.create(image_path)
 
     if img.shape[0] != img.shape[1]:
