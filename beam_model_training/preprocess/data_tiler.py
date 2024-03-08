@@ -64,7 +64,7 @@ class DataTiler(BaseClass):
         self.spatial_resolution = None
         write_dirs = ["image_tiles"]
 
-        self.tiling_params = self.load_tiling_params(config)
+        self.tiling_params = self._load_tiling_params(config)
 
         # Checking for images and loading in DataArrays
         images_dir = self.root_dir / self.DIR_STRUCTURE["images"]
@@ -72,7 +72,7 @@ class DataTiler(BaseClass):
             raise IOError(
                 "The directory path `images` does not point to an existing directry in `root_dir`."
             )
-        self.images_generator = self.load_images(images_dir)
+        self.images_generator = self._load_images(images_dir)
 
         # Checking for masks and loading if exist
         labels_dir = self.root_dir / self.DIR_STRUCTURE["labels"]
@@ -94,11 +94,11 @@ class DataTiler(BaseClass):
             if self.tiling_params["distance_weighting"]:
                 write_dirs.append("weight_tiles")
             # Loading labels from csv / shapefile.
-            self.labels = self.load_labels(valid_label_paths)
+            self.labels = self._load_labels(valid_label_paths)
 
         super().__init__(config, write_dirs=write_dirs)
 
-    def load_tiling_params(self, config):
+    def _load_tiling_params(self, config):
         """
         Loads tiling parameters from the configuration dictionary.
 
@@ -112,7 +112,7 @@ class DataTiler(BaseClass):
         tiling_keys = ["distance_weighting", "tile_labels", "erosion", "tile_size"]
         return {k: config["tiling"].get(k) for k in tiling_keys}
 
-    def load_images(self, image_dir):
+    def _load_images(self, image_dir):
         """
         Loads all GeoTIFF images in the provided directory using rioxarray.
 
@@ -137,7 +137,7 @@ class DataTiler(BaseClass):
         for img_path in filepaths:
             yield rxr.open_rasterio(img_path, default_name=img_path.stem)
 
-    def load_labels(self, labels_files):
+    def _load_labels(self, labels_files):
         """
         Crops labels based on the bounding box of the input image.
 
@@ -228,7 +228,7 @@ class DataTiler(BaseClass):
         """
 
         # Generate the mask
-        def poly_from_utm(polygon, transform):
+        def _poly_from_utm(polygon, transform):
             if polygon.is_empty:
                 return []
             elif polygon.geom_type == "MultiPolygon":
@@ -251,7 +251,7 @@ class DataTiler(BaseClass):
                 raise TypeError("Invalid geometry type")
 
         # Generate data array
-        def create_data_array(data, transform, image):
+        def _create_data_array(data, transform, image):
             data_da = xr.DataArray(
                 data,
                 dims=["y", "x"],
@@ -266,7 +266,7 @@ class DataTiler(BaseClass):
         transform = image.rio.transform()
 
         label_polygons = sum(
-            labels["geometry"].apply(poly_from_utm, args=(transform,)), []
+            labels["geometry"].apply(_poly_from_utm, args=(transform,)), []
         )  # converting all to lists of polygons, then concatenating.
         mask = np.full(image_size, 0, dtype=np.uint8)
         weights = np.full(image_size, 0, dtype=np.uint8)
@@ -295,8 +295,8 @@ class DataTiler(BaseClass):
                 )
                 weights = gaussian_filter(weights, sigma=0.5) * 200
 
-        mask_da = create_data_array(mask, transform, image)
-        weights_da = create_data_array(weights, transform, image)
+        mask_da = _create_data_array(mask, transform, image)
+        weights_da = _create_data_array(weights, transform, image)
 
         if write:
             tmp_dir = BaseClass.create_if_not_exists(
