@@ -115,7 +115,7 @@ class DataTiler(BaseClass):
             dict: Dictionary containing tiling parameters such as distance weighting,
                   whether to tile labels, erosion, and tile size.
         """
-        tiling_keys = ["distance_weighting", "tile_labels", "erosion", "tile_size"]
+        tiling_keys = ["distance_weighting", "erosion", "tile_size"]
         return {k: config["tiling"].get(k) for k in tiling_keys}
 
     def _load_images(self, image_dir):
@@ -395,9 +395,5 @@ class DataTiler(BaseClass):
                                 weights_tile, tile_name, self.weight_tiles_dir
                             )
 
-                        # Save labels in the appropriate folder.
-                        if self.tiling_params["tile_labels"]:
-                            tile_geom = box(*img_tile.rio.bounds())
-                            self.save_tile_shapefile(labels, tile_geom, tile_name)
                     pbar.update(1)
             pbar.close()
