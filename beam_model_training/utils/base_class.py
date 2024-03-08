@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import yaml
 
 
 class BaseClass:
@@ -44,6 +45,35 @@ class BaseClass:
             write_dirs (list): List of directory keys to write in. Those directories will be overwritten if files already exist in them.
         """
         self.load_dir_structure(config, read_dirs, write_dirs)
+
+    def _set_project_dir(self, project_dir):
+        project_dir_path = Path(project_dir)
+        if project_dir_path.exists():
+            return project_dir_path
+        raise ImportError(
+            f"The project directory {project_dir} could not be found."
+        )
+    
+    def load_config(self, config_path):
+        """
+        This function loads a configuration file and returns it as a dictionary.
+
+        Parameters:
+        config_name (str): The name of the configuration file to load.
+
+        Returns:
+        dict: A dictionary containing the loaded configuration.
+        """
+
+        if not config_path.exists():
+            raise ImportError(
+                f"The configuration file not found. Make sure {config_path.name} exists, or provide a different file name."
+            )
+
+        with open(config_path) as config_file:
+            config = yaml.safe_load(config_file)
+
+        return config
 
     def load_dir_structure(self, config, read_dirs, write_dirs):
         """

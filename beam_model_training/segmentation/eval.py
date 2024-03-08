@@ -1,3 +1,4 @@
+import argparse
 from datetime import datetime
 from itertools import islice
 
@@ -12,7 +13,7 @@ from PIL import Image, ImageDraw
 from segmentation.infer import MapGenerator
 from segmentation.train import Trainer
 from utils.base_class import BaseClass
-from utils.helpers import crs_to_pixel_coords, load_config
+from utils.helpers import crs_to_pixel_coords, seed
 
 
 class Evaluator(BaseClass):
@@ -21,11 +22,14 @@ class Evaluator(BaseClass):
 
     Attributes
     ----------
-    config : dict
-        Configuration dictionary specifying paths and model details.
+    Args:
+    project_dir : str
+        Path to the project directory, containing one or more models, as well as images and masks for evaluation.
+    config_name : str
+        Name of the config file. Defaults to project_config.yaml.
     generate_preds : bool
         Flag indicating whether predictions should be generated during evaluation.
-    
+
     Methods
     -------
     overlay_shapefiles_on_images(n_images, show=False):
@@ -36,18 +40,29 @@ class Evaluator(BaseClass):
         Generates predictions, overlays them on images, computes metrics, and saves the results.
     """
 
-    def __init__(self, config, generate_preds=True):
+    def __init__(
+        self,
+        project_dir,
+        config_name="project_config.yaml",
+        generate_preds=False,
+        model_path=None,
+    ):
         """
         Constructs all the necessary attributes for the Evaluator object.
 
         Parameters
         ----------
-        config : dict
-            Configuration dictionary specifying paths and model details.
+        project_dir : str
+            Path to the project directory, containing one or more models, as well as images and masks for evaluation.
+        config_name : str
+            Name of the config file. Defaults to project_config.yaml.
         """
 
-        self.config = config
-        self.model_version = config["model_version"]
+        self.root_dir = super()._set_project_dir(project_dir)
+        self.config = super().load_config(self.root_dir / config_name)
+        seed(self.config["seed"])
+
+        self.model_version = self.config["model_version"]
         self.generate_preds = generate_preds
         read_dirs = ["test_images", "test_masks", "models", "eval"]
         write_dirs = []
@@ -55,10 +70,10 @@ class Evaluator(BaseClass):
             write_dirs += ["shapefiles", "predictions"]
         else:
             read_dirs += ["shapefiles", "predictions"]
-        super().__init__(config, read_dirs=read_dirs, write_dirs=write_dirs)
+        super().__init__(self.config, read_dirs=read_dirs, write_dirs=write_dirs)
         try:
 
-            model_path = super().load_model_path(config)
+            model_path = model_path or super().load_model_path(self.config)
             self.model = load_learner(model_path)
 
         except KeyError as e:
@@ -79,48 +94,47 @@ class Evaluator(BaseClass):
             f for f in self.shapefiles_dir.iterdir() if f.name.endswith(".shp")
         ]
         for shapefile in islice(shapefiles, 0, n_images):
-            if shapefile.name.endswith(".shp"):
-                # Construct the corresponding image file path
-                image_file = shapefile.name.replace("_predicted.shp", ".tif")
-                image_path = self.test_images_dir / image_file
+            # Construct the corresponding image file path
+            image_file = shapefile.name.replace("_predicted.shp", ".tif")
+            image_path = self.test_images_dir / image_file
 
-                if image_path.exists():
-                    # Read the shapefile
-                    gdf = gpd.read_file(shapefile)
+            if image_path.exists():
+                # Read the shapefile
+                gdf = gpd.read_file(shapefile)
 
-                    # Open the image
-                    with rasterio.open(image_path) as ds:
-                        transform = ds.transform
+                # Open the image
+                with rasterio.open(image_path) as ds:
+                    transform = ds.transform
 
-                        img = Image.fromarray(ds.read().transpose((1, 2, 0)))
-                        draw = ImageDraw.Draw(img)
+                    img = Image.fromarray(ds.read().transpose((1, 2, 0)))
+                    draw = ImageDraw.Draw(img)
 
-                        for geometry in gdf.geometry:
-                            # Convert the polygon coordinates to image pixel coordinates and overlay to img
-                            if geometry.geom_type == "Polygon":
-                                polygon = [
-                                    crs_to_pixel_coords(x, y, transform)
-                                    for x, y in zip(
-                                        geometry.exterior.coords.xy[0],
-                                        geometry.exterior.coords.xy[1],
-                                    )
-                                ]
-                                draw.polygon(polygon, outline="red")
+                    for geometry in gdf.geometry:
+                        # Convert the polygon coordinates to image pixel coordinates and overlay to img
+                        if geometry.geom_type == "Polygon":
+                            polygon = [
+                                crs_to_pixel_coords(x, y, transform)
+                                for x, y in zip(
+                                    geometry.exterior.coords.xy[0],
+                                    geometry.exterior.coords.xy[1],
+                                )
+                            ]
+                            draw.polygon(polygon, outline="red")
 
-                        # Display the image
-                        if show == True:
-                            plt.imshow(img)
-                            plt.title(image_file)
-                            plt.show()
-                        else:
-                            output_path = self.eval_dir / f"eval_pred_{image_file}"
-                            img.save(output_path)
-                            print(
-                                f"Image file {output_path.name} written to `{output_path.parent.name}`."
-                            )
+                    # Display the image
+                    if show == True:
+                        plt.imshow(img)
+                        plt.title(image_file)
+                        plt.show()
+                    else:
+                        output_path = self.eval_dir / f"eval_pred_{image_file}"
+                        img.save(output_path)
+                        print(
+                            f"Image file {output_path.name} written to `{output_path.parent.name}`."
+                        )
 
-                else:
-                    print(f"Image file {image_file} not found.")
+            else:
+                print(f"Image file {image_file} not found.")
 
     def compute_metrics(self, map_gen, iou_threshold=0.5):
         """
@@ -138,11 +152,11 @@ class Evaluator(BaseClass):
         pd.DataFrame
             A dataframe containing the computed metrics.
         """
+
         def calculate_building_iou(poly1, poly2):
             intersection = poly1.intersection(poly2).area
             union = poly1.union(poly2).area
             return intersection / union
-
 
         sum_intersect = 0
         sum_total_pred = 0
@@ -162,18 +176,24 @@ class Evaluator(BaseClass):
         ]
         for groundtruth_path in gt_images:
             pred_mask_path = self.predictions_dir / (
-                groundtruth_path.stem + "_inference.tif"
+                groundtruth_path.stem + "_INFERENCE.TIF"
             )
 
             if pred_mask_path.exists():
 
                 # Load ground truth mask
-                gt_mask = rxr.open_rasterio(groundtruth_path, default_name=groundtruth_path.name)
+                gt_mask = rxr.open_rasterio(
+                    groundtruth_path, default_name=groundtruth_path.name
+                )
                 gt_gdf = map_gen.create_shp_from_mask(gt_mask)
-                gt_values = (gt_mask / 255).astype(int).values  # Convert to binary (0 and 1)
+                gt_values = (
+                    (gt_mask / 255).astype(int).values
+                )  # Convert to binary (0 and 1)
 
                 # Load predicted mask
-                pred_mask = rxr.open_rasterio(pred_mask_path, default_name=pred_mask_path.name)
+                pred_mask = rxr.open_rasterio(
+                    pred_mask_path, default_name=pred_mask_path.name
+                )
                 pred_gdf = map_gen.create_shp_from_mask(pred_mask)
                 pred_values = (pred_mask > 0.5).astype(int).values
 
@@ -186,7 +206,7 @@ class Evaluator(BaseClass):
                 sum_xor += np.sum(pred_values == gt_values)
                 buildings_total_pred += len(pred_gdf)
                 buildings_total_truth += len(gt_gdf)
-                
+
                 for pred_poly in pred_gdf.geometry:
                     for gt_poly in gt_gdf.geometry:
                         iou = calculate_building_iou(pred_poly, gt_poly)
@@ -216,7 +236,9 @@ class Evaluator(BaseClass):
                 "Accuracy": [round(accuracy, 3)],
                 "Dice": [round(dice, 3)],
                 "IoU": [round(iou, 3)],
-                f"Building Precision @ {iou_threshold} IoU": [round(building_precision, 3)],
+                f"Building Precision @ {iou_threshold} IoU": [
+                    round(building_precision, 3)
+                ],
                 f"Building Recall @ {iou_threshold} IoU": [round(building_recall, 3)],
             }
             return pd.DataFrame(metrics)
@@ -252,6 +274,43 @@ class Evaluator(BaseClass):
 
 
 if __name__ == "__main__":
-    config = load_config("UNet_config.yaml")
-    evaluator = Evaluator(config)
-    evaluator.evaluate(n_images=10, iou_threshold=0.3)
+    parser = argparse.ArgumentParser(
+        description="Evaluate the segmentation model performance."
+    )
+    parser.add_argument(
+        "-d", "--project_dir", type=str, help="The project directory.", required=True
+    )  # required
+    parser.add_argument(
+        "-c",
+        "--config_name",
+        type=str,
+        default="project_config.yaml",
+        help="The configuration file name. Defaults to 'project_config.yaml'.",
+    )  # optional
+    parser.add_argument(
+        "--generate_preds",
+        default=False,
+        action="store_true",
+        help="Flag indicating whether predictions should be generated during evaluation. Defaults to False.",
+    )
+    parser.add_argument(
+        "--n_images",
+        type=int,
+        default=10,
+        help="Number of images to overlay shapefiles on. Defaults to 10.",
+    )
+    parser.add_argument(
+        "--iou_threshold",
+        type=float,
+        default=0.5,
+        help="The IoU threshold for computing metrics. Defaults to 0.5.",
+    )
+
+    args = parser.parse_args()
+
+    evaluator = Evaluator(
+        project_dir=args.project_dir,
+        config_name=args.config_name,
+        generate_preds=args.generate_preds,
+    )
+    evaluator.evaluate(n_images=args.n_images, iou_threshold=args.iou_threshold)

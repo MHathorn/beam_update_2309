@@ -5,52 +5,55 @@ from preprocess.data_tiler import DataTiler
 from preprocess.transform import gen_train_test
 from segmentation.train import Trainer
 from segmentation.eval import Evaluator
-from utils.helpers import load_config, seed
+from utils.helpers import seed
 
 
-def prepare_data(config):
-    seed(config["seed"])
+def prepare_data(project_dir, config_name):
 
-    img_tiler = DataTiler(config)
-    img_tiler.generate_tiles(config["tiling"]["tile_size"])
+    img_tiler = DataTiler(project_dir, config_name)
+    img_tiler.generate_tiles()
 
-    if config["training"]:
-        gen_train_test(config["root_dir"], test_size=config["test_size"])
+    if img_tiler.config["training"]:
+        gen_train_test(project_dir, test_size=img_tiler.config["test_size"])
 
 
-def train(config):
+def train(project_dir, config_name):
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     os.environ["OMP_NUM_THREADS"] = "1"
 
-    trainer = Trainer(config)
+    trainer = Trainer(project_dir, config_name)
     model_path = trainer.run()
     return model_path
 
 
-def eval(config):
-    evaluator = Evaluator(config)
+def eval(project_dir, config_name, model_path):
+    evaluator = Evaluator(project_dir, config_name, model_path=model_path)
     evaluator.evaluate()
 
 
-def main(config_file):
-    config = load_config("test_config.yaml")
-    prepare_data(config)
-    model_path = train(config)
-    config["test"]["model_name"] = model_path.name
-    eval(config)
+def main(project_dir, config_name):
+    prepare_data(project_dir, config_name)
+    model_path = train(project_dir, config_name)
+    eval(project_dir, config_name, model_path)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Train a model with a specified configuration file."
+        description="Train a model end-to-end including tiling, training and evaluation based on a specified configuration file."
+    )
+    parser.add_argument(
+        "-d",
+        "--project_dir",
+        type=str,
+        help="The project directory.",
     )
     parser.add_argument(
         "-c",
-        "--config_file",
+        "--config_name",
         type=str,
         help="The name of the configuration file.",
-        default="test_config.yaml",
+        default="project_config.yaml",
     )
 
     args = parser.parse_args()
-    main(args.config_file)
+    main(args.project_dir, args.config_file)

@@ -1,3 +1,4 @@
+import argparse
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -20,7 +21,7 @@ from tqdm import tqdm
 from preprocess.sample import tile_in_settlement
 from segmentation.train import Trainer
 from utils.base_class import BaseClass
-from utils.helpers import get_rgb_channels, load_config
+from utils.helpers import get_rgb_channels, seed
 
 logging.basicConfig(level=logging.INFO)
 
@@ -37,7 +38,7 @@ class MapGenerator(BaseClass):
         Configuration dictionary specifying paths and model details.
     generate_preds : bool
         Flag indicating whether predictions should be generated during evaluation.
-    
+
     Methods
     -------
     create_shp_from_mask(mask_da):
@@ -49,22 +50,28 @@ class MapGenerator(BaseClass):
     filter_by_areas(output_files, settlements, primary_key):
         Filters and merges rasters by settlement areas.
     create_tile_inferences(images_dir=None, settlements=None, primary_key=""):
-        Performs inference on each tile in the images directory and optionally merges the results to match a settlement boundaries shapefile.
+        Performs inference on each tile in the images directory and (optionally) merges the results to match a settlement boundaries shapefile indexed by primary_key.
     """
 
-
-    def __init__(self, config, generate_preds=False):
+    def __init__(
+        self, project_dir, config_name="project_config.yaml", generate_preds=False
+    ):
         """
         Constructs all the necessary attributes for the MapGenerator object.
 
         Parameters
         ----------
-            config : dict
-                Configuration dictionary containing paths and inference arguments.
             generate_preds : bool
                 Flag indicating whether predictions should be generated during evaluation.
-    
+            project_dir : str
+                Path to the project directory, containing one or more models, as well as images and settlement boundaries (optional) for map generation.
+            config_name : str
+                Name of the config file. Defaults to project_config.yaml.
         """
+
+        self.root_dir = super()._set_project_dir(project_dir)
+        config = super().load_config(self.root_dir / config_name)
+        seed(config["seed"])
         read_dirs = ["test_images", "models"]
         prediction_dirs = ["predictions", "shapefiles"]
         self.generate_preds = generate_preds
@@ -154,51 +161,61 @@ class MapGenerator(BaseClass):
             A pandas Series where each entry is a list of tile names associated with a merged settlement group. The index of the Series is a MultiIndex with levels [f'{primary_key}_group', 'geometry'].
         """
         # Create a GeoDataFrame from the list of tiles
-        data = [{"name": da.name, "geometry": box(*da.rio.bounds())} for da in mask_tiles]
+        data = [
+            {"name": da.name, "geometry": box(*da.rio.bounds())} for da in mask_tiles
+        ]
         tiles_gdf = gpd.GeoDataFrame(data, crs=self.crs)
-        
+
         # Find settlements in tiles and create a graph of settlements
         joined = gpd.sjoin(settlements, tiles_gdf, how="inner", op="intersects")
-        
+
         G = nx.Graph()
-        
+
         # Add nodes for each settlement
         for index, row in joined.iterrows():
-            G.add_node(index, **{primary_key: row[primary_key], 'geometry': row['geometry']})
-        
+            G.add_node(
+                index, **{primary_key: row[primary_key], "geometry": row["geometry"]}
+            )
+
         # Add edges between settlements that share the same tile (indicating potential overlap)
-        for _, group in joined.groupby('name'):
+        for _, group in joined.groupby("name"):
             for i, _ in group.iterrows():
                 for j, _ in group.iterrows():
                     if i != j:
                         G.add_edge(i, j)
-        
+
         # Find connected components (groups of overlapping settlements)
         components = list(nx.connected_components(G))
-        
+
         # Merge overlapping settlements into new settlement groups
         merged_settlements = []
         for component in components:
             # Extract the settlements in this component
             component_settlements = joined.loc[list(component)]
-            
+
             # Merge their geometries into a single geometry (unary_union)
-            merged_geometry = component_settlements['geometry'].unary_union
-            
+            merged_geometry = component_settlements["geometry"].unary_union
+
             # Create a new entry for the merged settlement
             merged_settlement = {
-                f'{primary_key}_group': '_'.join(map(str, component_settlements[primary_key].unique())),
-                'geometry': merged_geometry
+                f"{primary_key}_group": "_".join(
+                    map(str, component_settlements[primary_key].unique())
+                ),
+                "geometry": merged_geometry,
             }
             merged_settlements.append(merged_settlement)
-        
+
         # Create a new GeoDataFrame for the merged settlements
         merged_settlements_gdf = gpd.GeoDataFrame(merged_settlements, crs=self.crs)
-        
+
         # Step 4: Repeat spatial join with the merged settlements to update tile associations
-        final_joined = gpd.sjoin(merged_settlements_gdf, tiles_gdf, how="inner", op="intersects")
-        grouped_tiles = final_joined.groupby([f'{primary_key}_group', "geometry"])["name"].apply(list)
-        
+        final_joined = gpd.sjoin(
+            merged_settlements_gdf, tiles_gdf, how="inner", op="intersects"
+        )
+        grouped_tiles = final_joined.groupby([f"{primary_key}_group", "geometry"])[
+            "name"
+        ].apply(list)
+
         return grouped_tiles
 
     def single_tile_inference(self, image_file, AOI_gpd=None, write_shp=True):
@@ -281,7 +298,7 @@ class MapGenerator(BaseClass):
         filtered_buildings : gpd.GeoDataFrame
             Merged and masked geospatial data for each settlement, enriched with settlement attributes.
         """
-         
+
         grouped_tiles = self.group_tiles_by_connected_area(
             output_files, settlements, primary_key
         )
@@ -300,8 +317,12 @@ class MapGenerator(BaseClass):
         all_buildings = gpd.GeoDataFrame(
             pd.concat(gdfs), geometry="geometry", crs=self.crs
         )
-        filtered_buildings = gpd.sjoin(all_buildings, settlements, how='inner', op="intersects")
-        filtered_buildings = filtered_buildings.drop_duplicates(subset=['geometry']).reset_index()
+        filtered_buildings = gpd.sjoin(
+            all_buildings, settlements, how="inner", op="intersects"
+        )
+        filtered_buildings = filtered_buildings.drop_duplicates(
+            subset=["geometry"]
+        ).reset_index()
 
         return filtered_buildings
 
@@ -322,13 +343,14 @@ class MapGenerator(BaseClass):
         -----
         This function saves the inference results to disk. If settlements are provided, the results are grouped by settlement before being saved.
         """
-        
-        
+
         images_dir = Path(images_dir or self.test_images_dir)
         self.crs = self.crs or self.get_crs(images_dir)
         if self.crs is None:
-            raise rxr.exceptions.MissingCRS("CRS could not be set. Please provide a valid images directory for CRS assignment.")
-        
+            raise rxr.exceptions.MissingCRS(
+                "CRS could not be set. Please provide a valid images directory for CRS assignment."
+            )
+
         output_files = []
         if not self.generate_preds and any(self.predictions_dir.iterdir()):
             preds = list(self.predictions_dir.iterdir())
@@ -340,27 +362,32 @@ class MapGenerator(BaseClass):
                 if img.name is None:
                     img.name = img.long_name
                 output_files.append(img)
-            
+
         else:
 
-            image_files = list(
-                images_dir.glob("*.TIF")
-                ) + list(
-                    images_dir.glob("*.TIFF")
-                    )
+            image_files = list(images_dir.glob("*.TIF")) + list(
+                images_dir.glob("*.TIFF")
+            )
             logging.info(
                 f"Found {len(image_files)} image files in directory {images_dir}. "
             )
             write_shp = settlements is None
-            
+
             # for image in tqdm(image_files):
             #     output_da = self.single_tile_inference(image, settlements, write_shp)
             #     if output_da is not None:
             #         output_files.append(output_da)
             with ProcessPoolExecutor() as executor:
-                futures = [executor.submit(self.single_tile_inference, image_file, settlements, write_shp) for image_file in image_files]
-                
-                for future in tqdm(as_completed(futures), total=len(futures), desc="Progressing"):
+                futures = [
+                    executor.submit(
+                        self.single_tile_inference, image_file, settlements, write_shp
+                    )
+                    for image_file in image_files
+                ]
+
+                for future in tqdm(
+                    as_completed(futures), total=len(futures), desc="Progressing"
+                ):
                     try:
                         result = future.result()
                     except Exception as e:
@@ -368,7 +395,7 @@ class MapGenerator(BaseClass):
                         continue
                     if result is not None:
                         output_files.append(result)
-                    
+
             logging.info(f"Inference completed for {len(output_files)} tiles.")
 
         if len(output_files) == 0:
@@ -389,6 +416,25 @@ class MapGenerator(BaseClass):
 
 
 if __name__ == "__main__":
-    config = load_config("test_config.yaml")
-    map_gen = MapGenerator(config)
+    parser = argparse.ArgumentParser(
+        description="Generate a map for all tiles in the test directory."
+    )
+    parser.add_argument(
+        "-d", "--project_dir", type=str, help="The project directory.", required=True
+    )  # required
+    parser.add_argument(
+        "-c",
+        "--config_name",
+        type=str,
+        default="project_config.yaml",
+        help="The configuration file name. Defaults to 'project_config.yaml'.",
+    )  # optional
+    parser.add_argument(
+        "--generate_preds",
+        default=False,
+        action="store_true",
+        help="Flag indicating whether predictions should be generated for mapping, or pulled from the predictions directory. Defaults to False.",
+    )
+    args = parser.parse_args()
+    map_gen = MapGenerator(args.project_dir, args.config_name, args.generate_preds)
     map_gen.create_tile_inferences()

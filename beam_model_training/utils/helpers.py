@@ -21,35 +21,6 @@ def seed(seed_value=0):
     torch.backends.cudnn.benchmark = False
 
 
-def load_config(config_name):
-    """
-    This function loads a configuration file and updates it with the values from a base configuration file.
-
-    Parameters:
-    config_name (str): The name of the configuration file to load.
-
-    Returns:
-    dict: A dictionary containing the loaded configuration.
-    """
-    default_config = Path(__file__).parents[1] / "configs" / "test_config.yaml"
-    config_path = default_config.parent / config_name
-
-    if not default_config.exists():
-        raise ImportError(
-            "Configs default file not found. Make sure the configs/ directory location is correct and test_config exists."
-        )
-    if not config_path.exists():
-        raise IOError(
-            f"Config file {config_path} not found. Make sure the name is correct."
-        )
-
-    with open(default_config) as default_file, open(config_path) as config_file:
-        config = yaml.safe_load(default_file)
-        config.update(yaml.safe_load(config_file))
-
-    return config
-
-
 def timestamp():
     """Timestamp for tracking experiments."""
     tz = pytz.timezone("Europe/Berlin")

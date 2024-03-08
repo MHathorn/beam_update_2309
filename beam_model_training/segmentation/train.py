@@ -1,3 +1,4 @@
+import argparse
 import random
 
 import numpy as np
@@ -14,7 +15,7 @@ from segmentation.losses import (
     CrossCombinedLoss,
     WeightedCrossCombinedLoss,
 )
-from utils.helpers import get_tile_size, load_config, seed, timestamp
+from utils.helpers import get_tile_size, seed, timestamp
 
 
 class Trainer(BaseClass):
@@ -26,19 +27,22 @@ class Trainer(BaseClass):
     such as U-Net and HRNet, and allows for various customizations through the config parameters.
     """
 
-    def __init__(self, config):
+    def __init__(
+        self, project_dir, config_name="project_config.yaml", generate_preds=True
+    ):
         """
         Initialize the Trainer class with configuration settings.
 
-        Args:
-            config (dict): Configuration settings, which must include:
-                - root_dir (str): Root directory containing all training files.
-                - seed (int): Seed for random number generator.
-                - codes (list): List of unique codes representing classes.
-                - test_size (float): Proportion of data to be used for testing.
-                - tiling (dict): Contains 'distance_weighting' and 'erosion' keys indicating whether distance weighting or erosion preprocessing has been applied.
-                - train (dict): Training parameters including architecture, backbone, epochs, loss function, batch size, pretrained flag, and early stopping flag.
+        Parameters
+        ----------
+        project_dir : str
+            Path to the project directory, containing a tiles directory with train and test folders for training.
+        config_name : str
+            Name of the config file. Defaults to project_config.yaml.
         """
+
+        self.root_dir = super()._set_project_dir(project_dir)
+        config = super().load_config(self.root_dir / config_name)
 
         # Load and initialize random seed
         self.load_params(config)
@@ -138,7 +142,7 @@ class Trainer(BaseClass):
         mask = mask.values.reshape((mask.shape[1], mask.shape[2]))
         mask = PILMask.create(mask)
 
-        # Bundle mask and weights for training with distance weighting 
+        # Bundle mask and weights for training with distance weighting
         if self.params["distance_weighting"]:
             weights_path = str(image_path).replace("images", "weights")
             weights = PILMask.create(weights_path)
@@ -330,7 +334,7 @@ class Trainer(BaseClass):
         tfms = self.setup_data_transforms()
         dls = self.prepare_dataloaders(tfms)
         self.check_dataset_balance()
-        
+
         if self.train_params["pretrained"]:
             self.learner.dls = dls
         else:
@@ -338,10 +342,6 @@ class Trainer(BaseClass):
             if self.params["distance_weighting"]:
                 # tfms.append(AddWeightsToTargets(weights_dir=self.train_weights_dir))
                 self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
-
-            
-
-            
 
             if self.train_params["architecture"].lower() == "hrnet":
                 self.learner = get_segmentation_learner(
@@ -404,7 +404,20 @@ if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     os.environ["OMP_NUM_THREADS"] = "1"
 
-    config = load_config("test_config.yaml")
+    parser = argparse.ArgumentParser(
+        description="Train the model with specified configuration settings."
+    )
+    parser.add_argument(
+        "-d", "--project_dir", type=str, help="The project directory.", required=True
+    )  # required
+    parser.add_argument(
+        "-c",
+        "--config_name",
+        type=str,
+        default="project_config.yaml",
+        help="The configuration file name. Defaults to 'project_config.yaml'.",
+    )  # optional
+    args = parser.parse_args()
 
-    trainer = Trainer(config)
+    trainer = Trainer(args.project_dir, args.config_name)
     trainer.run()

@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import rioxarray as rxr
 import xarray as xr
+
 from cv2 import erode
 from rasterio.features import rasterize
 from shapely import wkt
@@ -16,7 +17,7 @@ from scipy.ndimage import gaussian_filter
 from tqdm import tqdm
 
 from utils.base_class import BaseClass
-
+from utils.helpers import seed
 
 class DataTiler(BaseClass):
     """
@@ -50,21 +51,26 @@ class DataTiler(BaseClass):
         and `weight_tiles` (if distance weighting is enabled).
     """
 
-    def __init__(self, config):
+
+    def __init__(self, project_dir, config_name="project_config.yaml"):
         """
-        Initializes the DataTiler with configuration settings.
+        Initializes the DataTiler with the relevant configuration settings.
 
         Args:
-            config (dict): Configuration settings including root directory, tiling parameters,
-                           and directories for images and labels.
+            project_dir : str 
+                Path to the project directory, containing images, config file and labels (if training project).
+            config_name : str 
+                Name of the config file. Defaults to project_config.yaml.
         """
 
-        self.root_dir = Path(config["root_dir"])
+        self.root_dir = super()._set_project_dir(project_dir)
+        self.config = super().load_config(self.root_dir / config_name)
+        self.tiling_params = self._load_tiling_params(self.config)
+        seed(self.config["seed"])
+
         self.crs = None
         self.spatial_resolution = None
         write_dirs = ["image_tiles"]
-
-        self.tiling_params = self._load_tiling_params(config)
 
         # Checking for images and loading in DataArrays
         images_dir = self.root_dir / self.DIR_STRUCTURE["images"]
@@ -96,7 +102,9 @@ class DataTiler(BaseClass):
             # Loading labels from csv / shapefile.
             self.labels = self._load_labels(valid_label_paths)
 
-        super().__init__(config, write_dirs=write_dirs)
+        super().__init__(self.config, write_dirs=write_dirs)
+
+    
 
     def _load_tiling_params(self, config):
         """

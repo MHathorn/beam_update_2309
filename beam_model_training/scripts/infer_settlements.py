@@ -1,19 +1,35 @@
 # Example usage
+import argparse
 from pathlib import Path
 import pandas as pd
 from segmentation.infer import MapGenerator
 import geopandas as gpd
 
-from utils.helpers import load_config, seed
+from utils.helpers import seed
 
 
 if __name__ == "__main__":
-    config = load_config("settlements_gen_config.yaml")
-    seed(config["seed"])
-    # Assuming the tiles have already been prepared
-    root_path = Path(config["root_dir"])
+    parser = argparse.ArgumentParser(
+        description="Generate the map for a given set of settlements."
+    )
+    parser.add_argument(
+        "-d", "--project_dir", type=str, help="The project directory.", required=True
+    )  # required
+    parser.add_argument(
+        "-c",
+        "--config_name",
+        type=str,
+        default="project_config.yaml",
+        help="The configuration file name. Defaults to 'project_config.yaml'.",
+    )  # optional
+
+    args = parser.parse_args()
+
+    root_path = Path(args.project_dir)
     shp_dir = root_path / "AOIs"
-    img_dir = root_path / "tiles/images"
+    img_dir = (
+        root_path / "tiles/images"
+    )  # assuming the tiles have already been prepared
 
     settlements = pd.DataFrame()
     for file_path in shp_dir.iterdir():
@@ -21,9 +37,9 @@ if __name__ == "__main__":
             df = gpd.read_file(file_path)
             settlements = pd.concat([settlements, df])
 
-    # settlements = settlements[settlements.OBJECTID.isin([267,414,493,533,196,290,300,518,276])]
-    map_gen = MapGenerator(config, generate_preds=False)
+    map_gen = MapGenerator(
+        project_dir=args.project_dir, config_name=args.config_name, generate_preds=False
+    )
     map_gen.create_tile_inferences(
-        images_dir=img_dir,
-        settlements=settlements, primary_key="OBJECTID"
+        images_dir=img_dir, settlements=settlements, primary_key="OBJECTID"
     )
