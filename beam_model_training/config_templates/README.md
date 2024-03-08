@@ -16,8 +16,6 @@ The configuration file is divided into three main sections:
 
 **seed:** An integer value used for random seed setting, ensuring reproducibility.
 
-**root_dir:** The root directory for the experiment data, e.g., "F:/ethekwini".
-
 ## Data Settings
 
 **erosion:** A boolean value (true or false) indicating whether erosion is applied in the data processing step.

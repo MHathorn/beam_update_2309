@@ -1,6 +1,5 @@
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
-root_dir: C:\Users\adm.nkiner\Documents\BEAM\app\beam_update_2309\beam_model_training\tests\satellite
 seed: 2022
 # DATA SETTINGS
 test_size: 0.2
@@ -9,11 +8,6 @@ tiling:
   distance_weighting: true
   erosion: true
   tile_size: 256
-root_dir: /home/global.un.org/adm.nkiner/beam_update_2309/beam_model_training/tests/satellite
-seed: 2022
-test:
-  model_version: U-Net_20240117-1630
-test_size: 0.2
 # MODEL SETTINGS
 model_version: U-Net_20240117-1630 # required for evaluation or retraining
 train:

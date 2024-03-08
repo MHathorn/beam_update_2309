@@ -52,14 +52,16 @@ class Trainer(BaseClass):
         training_dirs = ["models", "train_images", "train_masks"]
         if self.params["distance_weighting"]:
             training_dirs.append("train_weights")
-        super().__init__(config, read_dirs=training_dirs)
+        super().__init__(self.root_dir, read_dirs=training_dirs)
 
         # Load learning arguments
         self._load_train_params(config)
         self.p2c_map = self._map_unique_classes()
 
         if self.train_params["pretrained"]:
-            model_path = super().load_model_path(config, pretrained=True)
+            model_path = super().load_model_path(
+                self.root_dir, config["model_version"], pretrained=True
+            )
             self.learner = load_learner(model_path)
 
     def load_params(self, config):
@@ -69,7 +71,7 @@ class Trainer(BaseClass):
             ValueError: If tile size is not a positive integer.
             KeyError: If a necessary key is missing from the config dictionary.
         """
-        params_keys = ["seed", "codes", "test_size", "root_dir"]
+        params_keys = ["seed", "codes", "test_size"]
         tile_params_keys = ["distance_weighting", "erosion"]
         try:
             self.params = {k: config[k] for k in params_keys}

@@ -76,10 +76,12 @@ class MapGenerator(BaseClass):
         prediction_dirs = ["predictions", "shapefiles"]
         self.generate_preds = generate_preds
         if self.generate_preds:
-            super().__init__(config, read_dirs=read_dirs, write_dirs=prediction_dirs)
+            super().__init__(
+                self.root_dir, read_dirs=read_dirs, write_dirs=prediction_dirs
+            )
         else:
-            super().__init__(config, read_dirs=(read_dirs + prediction_dirs))
-        model_path = super().load_model_path(config)
+            super().__init__(self.root_dir, read_dirs=(read_dirs + prediction_dirs))
+        model_path = super().load_model_path(self.root_dir, config["model_version"])
         self.model = load_learner(model_path)
         self.crs = self.get_crs(self.test_images_dir)
         self.erosion = config["tiling"]["erosion"]

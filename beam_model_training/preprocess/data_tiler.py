@@ -19,6 +19,7 @@ from tqdm import tqdm
 from utils.base_class import BaseClass
 from utils.helpers import seed
 
+
 class DataTiler(BaseClass):
     """
     Data Tiler class that processes geospatial imagery and labels into tiles.
@@ -51,15 +52,14 @@ class DataTiler(BaseClass):
         and `weight_tiles` (if distance weighting is enabled).
     """
 
-
     def __init__(self, project_dir, config_name="project_config.yaml"):
         """
         Initializes the DataTiler with the relevant configuration settings.
 
         Args:
-            project_dir : str 
+            project_dir : str
                 Path to the project directory, containing images, config file and labels (if training project).
-            config_name : str 
+            config_name : str
                 Name of the config file. Defaults to project_config.yaml.
         """
 
@@ -102,9 +102,7 @@ class DataTiler(BaseClass):
             # Loading labels from csv / shapefile.
             self.labels = self._load_labels(valid_label_paths)
 
-        super().__init__(self.config, write_dirs=write_dirs)
-
-    
+        super().__init__(self.root_dir, write_dirs=write_dirs)
 
     def _load_tiling_params(self, config):
         """
@@ -354,7 +352,6 @@ class DataTiler(BaseClass):
                     )
                     continue
                 mask, weights = self.generate_mask(image, labels, write_tmp_files)
-                    
 
             x_tiles = image.sizes["x"] // tile_size
             y_tiles = image.sizes["y"] // tile_size

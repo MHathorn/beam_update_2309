@@ -1,6 +1,5 @@
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
-root_dir: F:/dev_versions/hand_labels_model
 seed: 2022
 # DATA SETTINGS
 test_size: 0.2
@@ -9,9 +8,6 @@ tiling:
   distance_weighting: false
   erosion: true
   tile_size: 512
-root_dir: /datadrive/dev_versions/hand_labels_model
-seed: 2022
-test_size: 0.2
 # MODEL SETTINGS
 model_version: U-Net_20240221-1602 # required for evaluation or retraining
 train:

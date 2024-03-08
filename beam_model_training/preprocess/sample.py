@@ -1,11 +1,13 @@
 import json
+from math import log
 from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
 import rioxarray as rxr
 from shapely.geometry import box
-from utils.helpers import crs_to_pixel_coords
+from tqdm import tqdm
+from utils.helpers import crs_to_pixel_coords, seed
 
 
 def load_tile_info(tile_path):
@@ -47,29 +49,25 @@ def tile_in_settlement(tile, settlements):
     return any(settlements.intersects(tile_geom))
 
 
-def calculate_score(num_buildings, probability_score, in_settlement):
+def calculate_score(num_buildings, probability_score):
     """
-    Calculate a score for a tile based on the number of buildings, probability score, and whether it is in a settlement.
+    Calculate a score for a tile based on the number of buildings and probability score from the Google Open Buildings dataset.
 
     Args:
-        num_buildings (int): The number of buildings detected in the tile.
+        num_buildings (int): The number of buildings detections in the tile.
         probability_score (float): The probability score associated with the tile.
-        in_settlement (bool): Whether the tile is within an informal settlement.
 
     Returns:
         float: The calculated sampling score for the tile.
     """
-    sampling_score = (1 - probability_score) if num_buildings > 10 else 0.5
-
-    if in_settlement:
-        sampling_score *= 6  # Boost for informal settlements
-
-    return sampling_score
+    if num_buildings > 0:
+        return (1 - probability_score) * log(num_buildings)
+    return 0
 
 
-def sample_tiles(tile_directory, shp_dir, sample_size):
+def sample_tiles(tile_directory, shp_dir, sample_size, seed_id=2022):
     """
-    Sample a set of raster tiles based on scores calculated from metadata and overlap with settlements.
+    Sample a set of raster tiles from informal settlements based on scores calculated from pseudo-labels.
 
     Args:
         tile_directory (str or Path): The directory containing raster tiles.
@@ -80,6 +78,7 @@ def sample_tiles(tile_directory, shp_dir, sample_size):
         list: A list of paths to the sampled raster tiles.
     """
     tile_dir = Path(tile_directory)
+    seed(seed_id)
 
     settlements = pd.DataFrame()
     for file_path in shp_dir.iterdir():
@@ -89,11 +88,11 @@ def sample_tiles(tile_directory, shp_dir, sample_size):
 
     # Load tiles and calculate scores
     tile_scores = []
-    for tile_path in tile_dir.glob("*.tif"):
+    for tile_path in tqdm(list(tile_dir.iterdir())):
         tile, num_buildings, probability_score = load_tile_info(tile_path)
-        in_settlement = tile_in_settlement(tile, settlements)
-        score = calculate_score(num_buildings, probability_score, in_settlement)
-        tile_scores.append((tile_path, score))
+        if tile_in_settlement(tile, settlements):
+            score = calculate_score(num_buildings, probability_score)
+            tile_scores.append((tile_path, score))
 
     # Convert to DataFrame for easier handling
     df = pd.DataFrame(tile_scores, columns=["tile_path", "score"])

@@ -70,10 +70,12 @@ class Evaluator(BaseClass):
             write_dirs += ["shapefiles", "predictions"]
         else:
             read_dirs += ["shapefiles", "predictions"]
-        super().__init__(self.config, read_dirs=read_dirs, write_dirs=write_dirs)
+        super().__init__(self.root_dir, read_dirs=read_dirs, write_dirs=write_dirs)
         try:
 
-            model_path = model_path or super().load_model_path(self.config)
+            model_path = model_path or super().load_model_path(
+                self.root_dir, self.model_version
+            )
             self.model = load_learner(model_path)
 
         except KeyError as e:

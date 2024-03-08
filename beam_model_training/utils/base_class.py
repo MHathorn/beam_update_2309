@@ -6,7 +6,7 @@ import yaml
 class BaseClass:
     """
     BaseClass is a utility class for managing directory structures throughout the codebase.
-    
+
     It provides methods to set up directories based on the configuration file, and ensures that
     the required directories exist or are created as needed. It also supports loading model paths
     from specified directories.
@@ -14,7 +14,6 @@ class BaseClass:
     Attributes:
         DIR_STRUCTURE (dict): A class attribute that defines the standard directory structure.
     """
-
 
     DIR_STRUCTURE = {
         "images": "images",
@@ -35,25 +34,23 @@ class BaseClass:
         "test_weights": "tiles/test/weights",
     }
 
-    def __init__(self, config, read_dirs=[], write_dirs=[]):
+    def __init__(self, project_dir, read_dirs=[], write_dirs=[]):
         """
         Initializes the BaseClass with the given configuration.
 
         Parameters:
-            config (dict): Configuration dictionary containing at least the 'root_dir' key.
+            project_dir (PosixPath): Path to the project directory.
             read_dirs (list): List of directory keys to be read from.
             write_dirs (list): List of directory keys to write in. Those directories will be overwritten if files already exist in them.
         """
-        self.load_dir_structure(config, read_dirs, write_dirs)
+        self.load_dir_structure(project_dir, read_dirs, write_dirs)
 
     def _set_project_dir(self, project_dir):
         project_dir_path = Path(project_dir)
         if project_dir_path.exists():
             return project_dir_path
-        raise ImportError(
-            f"The project directory {project_dir} could not be found."
-        )
-    
+        raise ImportError(f"The project directory {project_dir} could not be found.")
+
     def load_config(self, config_path):
         """
         This function loads a configuration file and returns it as a dictionary.
@@ -75,25 +72,24 @@ class BaseClass:
 
         return config
 
-    def load_dir_structure(self, config, read_dirs, write_dirs):
+    def load_dir_structure(self, project_dir, read_dirs, write_dirs):
         """
         Loads the directory structure based on the provided configuration, read_dirs, and write_dirs.
 
         It sets attributes for each directory path after ensuring they exist or creating them if necessary.
 
         Parameters:
-            config (dict): Configuration dictionary containing at least the 'root_dir' key.
+            project_dir (PosixPath): Path to the project directory.
             read_dirs (list): List of directory keys to be read from.
             write_dirs (list): List of directory keys to write in. Those directories will be overwritten if files already exist in them.
 
         Raises:
             KeyError: If a directory key is not registered in DIR_STRUCTURE.
         """
-        path = Path(config["root_dir"])
         all_dirs = set(read_dirs + write_dirs)
         for dir_name in all_dirs:
             try:
-                dir_path = path / self.DIR_STRUCTURE[dir_name]
+                dir_path = project_dir / self.DIR_STRUCTURE[dir_name]
             except KeyError as e:
                 raise KeyError(f"The directory key {e} is not registered in BaseClass.")
             overwrite = dir_name in write_dirs
@@ -103,12 +99,13 @@ class BaseClass:
                 self.create_if_not_exists(dir_path, overwrite=overwrite),
             )
 
-    def load_model_path(self, config, pretrained=False):
+    def load_model_path(self, project_dir, model_version, pretrained=False):
         """
         Loads the path to the model file, either as pretrained model, or as a model to be evaluated.
 
         Parameters:
-            config (dict): Configuration dictionary containing at least the 'root_dir' and 'model_version' keys.
+            project_dir (PosixPath): Path to the project directory.
+            model_version (str): Identifier of the model version.
             pretrained (bool): Flag indicating whether to load a pretrained model.
 
         Returns:
@@ -117,9 +114,10 @@ class BaseClass:
         Raises:
             ValueError: If the model directory does not exist or does not contain exactly one pickle file.
         """
-        model_version = config["model_version"]
         if pretrained:
-            model_version_dir = Path(config["root_dir"]) / self.DIR_STRUCTURE["pretrained"] / model_version
+            model_version_dir = (
+                project_dir / self.DIR_STRUCTURE["pretrained"] / model_version
+            )
             pickle_files = list(model_version_dir.glob(f"{model_version}*"))
         else:
             model_version_dir = self.models_dir / model_version

@@ -1,6 +1,5 @@
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
-root_dir: /datadrive/SanSalvador_model
 seed: 2022
 # DATA SETTINGS
 test_size: 0.2

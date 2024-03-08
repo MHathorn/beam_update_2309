@@ -1,6 +1,5 @@
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
-root_dir: /datadrive/map_generation/SanJose
 seed: 2022
 # DATA SETTINGS
 test_size: 0.2
