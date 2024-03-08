@@ -1,6 +1,6 @@
 # GENERAL SETTINGS
 codes: ["Background", "Building"]
-root_dir: F:/SanJose_labeling2
+root_dir: /datadrive/map_generation/SanSalvador
 seed: 2022
 # DATA SETTINGS
 test_size: 0.2
