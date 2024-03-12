@@ -38,8 +38,8 @@ if __name__ == "__main__":
             settlements = pd.concat([settlements, df])
 
     map_gen = MapGenerator(
-        project_dir=args.project_dir, config_name=args.config_name, generate_preds=False
+        project_dir=args.project_dir, config_name=args.config_name, generate_preds=True
     )
     map_gen.generate_map_from_images(
-        images_dir=img_dir, settlements=settlements, primary_key="OBJECTID"
+        images_dir=img_dir, boundaries_gdf=settlements, primary_key="OBJECTID"
     )

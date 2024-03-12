@@ -85,8 +85,9 @@ class MapGenerator(BaseClass):
             )
         else:
             super().__init__(self.root_dir, read_dirs=(read_dirs + prediction_dirs))
-        model_path = super().load_model_path(self.root_dir, config["model_version"])
-        self.model = load_learner(model_path)
+        if config.get("model_version"):
+            model_path = super().load_model_path(self.root_dir, config["model_version"])
+            self.model = load_learner(model_path)
         self.crs = self.get_crs(self.test_images_dir)
         self.erosion = config["tiling"]["erosion"]
 
@@ -314,6 +315,10 @@ class MapGenerator(BaseClass):
         if tile.rio.crs != self.crs:
             tile = tile.rio.reproject(self.crs)
 
+        assert (
+            self.model
+        ), "The model version must be specified in the configuration settings."
+
         if boundaries_gdf is not None and not tile_in_settlement(tile, boundaries_gdf):
             return
         else:
@@ -331,7 +336,7 @@ class MapGenerator(BaseClass):
                 else (output - output_min) / (output_max - output_min)
             )
 
-        inference_path = self.predictions_dir / f"{image_file.stem}_inference.tif"
+        inference_path = self.predictions_dir / f"{image_file.stem}_inference.TIF"
 
         # Create a DataArray from the output and assign the coordinate reference system and affine transform from original tile
         output_da = xr.DataArray(
@@ -343,6 +348,7 @@ class MapGenerator(BaseClass):
         output_da = output_da.rio.write_crs(self.crs)
         output_da = output_da.rio.write_transform(tile.rio.transform())
         output_da.rio.to_raster(inference_path)
+        print(f"Saving output to {inference_path}")
 
         # Generate shapefile
         if write_shp:
@@ -378,6 +384,10 @@ class MapGenerator(BaseClass):
         """
 
         image_files = image_files or self._get_image_files(self.test_images_dir)
+        assert (
+            self.model
+        ), "The model version must be specified in the configuration settings."
+
         output_files = []
         if parallel:
             with ProcessPoolExecutor() as executor:
