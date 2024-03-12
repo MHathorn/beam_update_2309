@@ -7,25 +7,6 @@ from utils.helpers import get_rgb_channels
 from utils.base_class import BaseClass
 
 
-class AddWeightsToTargets(Transform):
-    """
-    A Transform that stacks a mask with its corresponding weights as channels.
-
-    Attributes:
-        weights_dir (Path): Directory containing weight files.
-    """
-    def __init__(self, weights_dir):
-        self.weights_dir = Path(weights_dir)
-
-    def encodes(self, x: PILMask):
-        # Load the corresponding weights file
-        weights_file = self.weights_dir / x.name
-        weights = PILMask.create(weights_file)
-        stacked = torch.stack([tensor(x), tensor(weights).squeeze(0)], dim=0)
-        print("Shape after stacking in transform:", stacked.shape)
-        return stacked
-
-
 def count_buildings(buildings, tile_geom):
     """
     Calculate the number of buildings for a given tile.
