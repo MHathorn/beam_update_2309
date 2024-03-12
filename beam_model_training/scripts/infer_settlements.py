@@ -40,6 +40,6 @@ if __name__ == "__main__":
     map_gen = MapGenerator(
         project_dir=args.project_dir, config_name=args.config_name, generate_preds=False
     )
-    map_gen.create_tile_inferences(
+    map_gen.generate_map_from_images(
         images_dir=img_dir, settlements=settlements, primary_key="OBJECTID"
     )

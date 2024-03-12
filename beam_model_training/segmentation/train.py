@@ -2,7 +2,6 @@ import argparse
 import random
 
 import numpy as np
-from preprocess.transform import AddWeightsToTargets
 import rioxarray as rxr
 from utils.base_class import BaseClass
 import xarray as xr
@@ -27,9 +26,7 @@ class Trainer(BaseClass):
     such as U-Net and HRNet, and allows for various customizations through the config parameters.
     """
 
-    def __init__(
-        self, project_dir, config_name="project_config.yaml", generate_preds=True
-    ):
+    def __init__(self, project_dir, config_name="project_config.yaml"):
         """
         Initialize the Trainer class with configuration settings.
 
@@ -45,13 +42,13 @@ class Trainer(BaseClass):
         config = super().load_config(self.root_dir / config_name)
 
         # Load and initialize random seed
-        self.load_params(config)
+        self._load_params(config)
         seed(self.params["seed"])
 
         # Load dirs and create if needed
         training_dirs = ["models", "train_images", "train_masks"]
-        if self.params["distance_weighting"]:
-            training_dirs.append("train_weights")
+        # if self.params["distance_weighting"]:
+        #     training_dirs.append("train_weights")
         super().__init__(self.root_dir, read_dirs=training_dirs)
 
         # Load learning arguments
@@ -64,7 +61,7 @@ class Trainer(BaseClass):
             )
             self.learner = load_learner(model_path)
 
-    def load_params(self, config):
+    def _load_params(self, config):
         """
         Load and assert general params for training.
         Raises:
@@ -72,10 +69,8 @@ class Trainer(BaseClass):
             KeyError: If a necessary key is missing from the config dictionary.
         """
         params_keys = ["seed", "codes", "test_size"]
-        tile_params_keys = ["distance_weighting", "erosion"]
         try:
-            self.params = {k: config[k] for k in params_keys}
-            self.params.update({k: config["tiling"][k] for k in tile_params_keys})
+            self.params = {k: config.get(k) for k in params_keys}
         except KeyError as e:
             raise KeyError(f"Config must have a value for {e} to run the Trainer.")
 
@@ -144,12 +139,6 @@ class Trainer(BaseClass):
         mask = mask.values.reshape((mask.shape[1], mask.shape[2]))
         mask = PILMask.create(mask)
 
-        # Bundle mask and weights for training with distance weighting
-        if self.params["distance_weighting"]:
-            weights_path = str(image_path).replace("images", "weights")
-            weights = PILMask.create(weights_path)
-            return torch.stack([tensor(mask), tensor(weights).squeeze(0)], dim=0)
-
         return PILMask.create(mask)
 
     def _get_batch_size(self, tile_size, backbone):
@@ -207,7 +196,7 @@ class Trainer(BaseClass):
             cbs.append(EarlyStoppingCallback(patience=10))
         return cbs
 
-    def get_y(self, x):
+    def _get_y(self, x):
         """
         Get the mask for a given image. Label function for SegmentationDataLoaders.
 
@@ -279,9 +268,8 @@ class Trainer(BaseClass):
             Hue(max_hue=0.2),
             Saturation(max_lighting=0.5),
         ]
-        if self.params["distance_weighting"]:
-            # tfms.append(AddWeightsToTargets(weights_dir=self.train_weights_dir))
-            self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
+        # if self.params["distance_weighting"]:
+        #     self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
         return tfms
 
     def prepare_dataloaders(self, tfms):
@@ -308,7 +296,7 @@ class Trainer(BaseClass):
                 len(image_files),
             )
 
-        label_func = partial(self.get_y)
+        label_func = partial(self._get_y)
 
         dls = SegmentationDataLoaders.from_label_func(
             self.train_images_dir,
@@ -341,9 +329,8 @@ class Trainer(BaseClass):
             self.learner.dls = dls
         else:
 
-            if self.params["distance_weighting"]:
-                # tfms.append(AddWeightsToTargets(weights_dir=self.train_weights_dir))
-                self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
+            # if self.params["distance_weighting"]: # not functional
+            #     self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
 
             if self.train_params["architecture"].lower() == "hrnet":
                 self.learner = get_segmentation_learner(

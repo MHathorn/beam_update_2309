@@ -35,16 +35,16 @@ class DataTiler(BaseClass):
                               whether to tile labels, erosion, and tile size.
 
     Methods:
-        load_tiling_params: Loads tiling parameters from the configuration.
-        load_images: Loads GeoTIFF images from a specified directory.
-        load_labels: Loads building footprints from vector files into a GeoDataFrame.
-        crop_labels: Crops labels based on the bounding box of an input image.
-        write_da_to_raster: Writes a DataArray to a raster file in TIFF format.
+        _load_tiling_params: Loads tiling parameters from the configuration.
+        _load_images: Loads GeoTIFF images from a specified directory.
+        _load_labels: Loads building footprints from vector files into a GeoDataFrame.
+        _crop_labels: Crops labels based on the bounding box of an input image.
+        _write_da_to_raster: Writes a DataArray to a raster file in TIFF format.
         generate_mask: Generates a binary mask from vector labels.
         generate_tiles: Tiles images and masks, and stores them as TIFF files.
 
     Usage:
-        img_tiler = DataTiler(config)
+        img_tiler = DataTiler(project_dir, config_name)
         img_tiler.generate_tiles(tile_size)
 
     Expected output:
@@ -188,7 +188,7 @@ class DataTiler(BaseClass):
         print(f"Loaded {len(buildings)} labels for the imaged region.")
         return buildings
 
-    def crop_labels(self, image):
+    def _crop_labels(self, image):
         """
         Crops labels based on the bounding box of the input image.
 
@@ -204,7 +204,7 @@ class DataTiler(BaseClass):
 
         return self.labels[self.labels.intersects(union_bounding_box)]
 
-    def write_da_to_raster(self, data, name, directory):
+    def _write_da_to_raster(self, data, name, directory):
         """
         Writes a DataArray to a raster file in TIFF format.
 
@@ -308,9 +308,9 @@ class DataTiler(BaseClass):
             tmp_dir = BaseClass.create_if_not_exists(
                 self.root_dir / "tmp", overwrite=True
             )
-            self.write_da_to_raster(mask_da, f"{image.name}_mask.tif", tmp_dir)
+            self._write_da_to_raster(mask_da, f"{image.name}_mask.tif", tmp_dir)
             if self.tiling_params["distance_weighting"]:
-                self.write_da_to_raster(weights_da, f"{image.name}_edges.tif", tmp_dir)
+                self._write_da_to_raster(weights_da, f"{image.name}_edges.tif", tmp_dir)
 
         return mask_da, weights_da
 
@@ -338,14 +338,14 @@ class DataTiler(BaseClass):
             print("Preparing inputs..")
             if self.crs is None:
                 self.crs = image.rio.crs
-                if self.labels and self.labels.crs != self.crs:
+                if self.labels is not None and self.labels.crs != self.crs:
                     self.labels = self.labels.to_crs(self.crs)
             elif image.rio.crs != self.crs:
                 image = image.rio.reproject(self.crs)
 
             # Prepare labels for training.
             if self.labels is not None:
-                labels = self.crop_labels(image)
+                labels = self._crop_labels(image)
                 if labels.empty:
                     print(
                         f"No intersecting labels found for {image.name}. Skipping image."
@@ -375,14 +375,14 @@ class DataTiler(BaseClass):
                         x=slice(i * tile_size, (i + 1) * tile_size),
                         y=slice(j * tile_size, (j + 1) * tile_size),
                     )
-                    self.write_da_to_raster(img_tile, tile_name, self.image_tiles_dir)
+                    self._write_da_to_raster(img_tile, tile_name, self.image_tiles_dir)
 
                     if self.labels is not None:
                         msk_tile = mask.isel(
                             x=slice(i * tile_size, (i + 1) * tile_size),
                             y=slice(j * tile_size, (j + 1) * tile_size),
                         )
-                        self.write_da_to_raster(
+                        self._write_da_to_raster(
                             msk_tile, tile_name, self.mask_tiles_dir
                         )
 
@@ -391,7 +391,7 @@ class DataTiler(BaseClass):
                                 x=slice(i * tile_size, (i + 1) * tile_size),
                                 y=slice(j * tile_size, (j + 1) * tile_size),
                             )
-                            self.write_da_to_raster(
+                            self._write_da_to_raster(
                                 weights_tile, tile_name, self.weight_tiles_dir
                             )
 
