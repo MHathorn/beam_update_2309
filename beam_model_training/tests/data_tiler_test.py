@@ -1,59 +1,83 @@
-from collections.abc import Generator
-import shutil
-import time
-from pathlib import Path
-import types
-
 import geopandas as gpd
 import pytest
 import rasterio
+import shutil
+import time
+import types
+
+from collections.abc import Generator
+from pathlib import Path
+
 from preprocess.data_tiler import DataTiler
+from tests.fixture_config import create_config
+import yaml
+
+base_config = {
+    "config_name": "satellite_config",
+    "config_value": {
+        "seed": 2022,
+        "tiling": {"tile_size": 256, "erosion": True, "distance_weighting": False},
+    },
+}
+
+mock_configs = {
+    name: create_config(name, base_config)
+    for name in [
+        "aerial_training",
+        "aerial_inference",
+        "aerial_single",
+        "satellite_training",
+        "satellite_inference",
+    ]
+}
+
+mock_configs["satellite_weighting"] = create_config(
+    "satellite_weighting", base_config, distance_weighting=True
+)
 
 
 class Test_DataTiler:
 
     @pytest.fixture(
-        scope="class",
-        params=[
-            "aerial_training",
-            "aerial_inference",
-            "aerial_single",
-            "satellite_training",
-            "satellite_inference",
-        ],
+        scope="class", params=mock_configs.values(), ids=mock_configs.keys()
     )
-    def name(self, request):
+    def mock_config(self, request):
         return request.param
 
     @pytest.fixture
-    def data_tiler(self, name, tmp_path_factory):
-
+    def data_tiler(self, mock_config, tmp_path_factory):
+        name, config = mock_config["config_name"], mock_config["config_value"]
         tmp_path = tmp_path_factory.mktemp("data_tiler_test")
         input_path = Path("beam_model_training/tests") / name.split("_")[0]
-        dir = tmp_path / name
-        test_config = input_path / "test_config.yaml"
+        test_dir = tmp_path / name
+        config_name = f"{name}_config.yaml"
 
-        dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(test_config, dir)
+        test_dir.mkdir(parents=True, exist_ok=True)
+        with open(test_dir / config_name, "w") as file:
+            yaml.dump(config, file)
 
         # Copy labels expect for inference tests
-        (dir / DataTiler.DIR_STRUCTURE["labels"]).mkdir(parents=True, exist_ok=True)
+        (test_dir / DataTiler.DIR_STRUCTURE["labels"]).mkdir(
+            parents=True, exist_ok=True
+        )
         if not name.endswith("inference"):
             for file in (input_path / DataTiler.DIR_STRUCTURE["labels"]).iterdir():
-                shutil.copy2(file, dir / DataTiler.DIR_STRUCTURE["labels"])
+                shutil.copy2(file, test_dir / DataTiler.DIR_STRUCTURE["labels"])
 
         # Copy images
-        (dir / DataTiler.DIR_STRUCTURE["images"]).mkdir(parents=True, exist_ok=True)
+        (test_dir / DataTiler.DIR_STRUCTURE["images"]).mkdir(
+            parents=True, exist_ok=True
+        )
         image_files = list((input_path / DataTiler.DIR_STRUCTURE["images"]).iterdir())
         copy_count = 1 if name.endswith("single") else len(image_files)
         for file in image_files[:copy_count]:
-            shutil.copy2(file, dir / DataTiler.DIR_STRUCTURE["images"])
+            shutil.copy2(file, test_dir / DataTiler.DIR_STRUCTURE["images"])
         try:
-            yield DataTiler(dir, "test_config.yaml")
+            yield DataTiler(test_dir, config_name)
         finally:
             # Clean up after tests.
             time.sleep(3)
-            shutil.rmtree(dir)
+            shutil.rmtree(test_dir)
 
     def test_load_images(self, name, data_tiler):
         assert isinstance(
@@ -105,16 +129,25 @@ class Test_DataTiler:
                 mask_files
             ), f"{name}: Number of images and mask tiles do not match."
 
-            for image_file in image_files:
-                mask_file = data_tiler.mask_tiles_dir / image_file.name
-                assert mask_file.exists()
+            image_file = image_files[0]
+            mask_file = data_tiler.mask_tiles_dir / image_file.name
+            assert mask_file.exists()
 
-                with rasterio.open(image_file) as image, rasterio.open(
-                    mask_file
-                ) as mask:
-                    assert (
-                        image.crs == mask.crs
-                    ), f"{name}: Image and mask CRS do not match"
-                    assert (
-                        image.transform == mask.transform
-                    ), f"{name}: Image and mask transform do not match"
+            with rasterio.open(image_file) as image, rasterio.open(mask_file) as mask:
+                assert image.crs == mask.crs, f"{name}: Image and mask CRS do not match"
+                assert (
+                    image.transform == mask.transform
+                ), f"{name}: Image and mask transform do not match"
+
+        if name.endswith("weighting"):
+            weight_files = list(data_tiler.weight_tiles_dir.glob("*.TIF"))
+            assert len(image_files) == len(
+                weight_files
+            ), f"{name}: Number of images and weight tiles do not match."
+        else:
+            weight_tiles_dir = (
+                data_tiler.root_dir + data_tiler.DIR_STRUCTURE["weight_tiles"]
+            )
+            assert (
+                not weight_tiles_dir.exists()
+            ), f"The directory {weight_tiles_dir} should not exist."

@@ -1,24 +1,27 @@
+import pytest
 import shutil
 import ssl
 import time
+import yaml
+
+from fastai.vision.all import PILMask
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-import pytest
-from fastai.vision.all import PILMask
 from preprocess.data_tiler import DataTiler
 from preprocess.transform import gen_train_test
 from segmentation.train import Trainer
-import yaml
+from tests.fixture_config import create_config
+
 
 base_config = {
-    "config_name": "satellite_config",
+    "config_name": "satellite_unet",
     "config_value": {
         "seed": 2022,
         "codes": ["Background", "Building"],
-        "tile_size": 256,
         "test_size": 0.2,
+        "tiling": {"tile_size": 256, "erosion": True, "distance_weighting": False},
         "train": {
             "architecture": "u-net",
             "backbone": "resnet18",
@@ -26,17 +29,8 @@ base_config = {
             "loss_function": None,
             "batch_size": 8,
         },
-        "root_dir": "satellite",
     },
 }
-
-
-def create_config(name, base_config, **kwargs):
-    # Create a copy of the base config to avoid mutating the original
-    config = dict(base_config)
-    config["config_name"] = name  # Update the config_name
-    config["config_value"].update(kwargs)  # Update any additional settings
-    return config
 
 
 mock_configs = {
@@ -79,7 +73,7 @@ class TestTrainer:
         tiles_path = root_dir / Trainer.DIR_STRUCTURE["image_tiles"]
         if not tiles_path.exists():
             data_tiler = DataTiler(root_dir, "test_config.yaml")
-            data_tiler.generate_tiles(config["tile_size"])
+            data_tiler.generate_tiles(config["tiling"]["tile_size"])
             gen_train_test(root_dir, test_size=config["test_size"])
 
         try:
@@ -100,6 +94,7 @@ class TestTrainer:
         finally:
             # Clean up after tests.
             time.sleep(3)
+            shutil.rmtree(test_dir)
 
     def test_map_unique_classes(self, trainer: Trainer):
 
@@ -122,7 +117,7 @@ class TestTrainer:
 
     def test_get_mask_shape(self, mock_config, trainer):
         pixel_to_class = {0: 0, 1: 255}
-        tile_size = mock_config["config_value"]["tile_size"]
+        tile_size = mock_config["config_value"]["tiling"]["tile_size"]
         image_path = next(trainer.train_images_dir.iterdir())
         mask = trainer._get_mask(image_path, pixel_to_class)
         assert isinstance(mask, PILMask)

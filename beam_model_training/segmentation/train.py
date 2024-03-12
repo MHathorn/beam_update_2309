@@ -90,7 +90,13 @@ class Trainer(BaseClass):
         ]
         self.train_params = {k: config["train"].get(k) for k in train_keys}
 
-        assert self.train_params["architecture"].lower() in ["u-net", "hrnet"]
+        assert self.train_params["architecture"].lower() in [
+            "u-net",
+            "hrnet",
+        ], "Architecture config should be one of U-Net, HRNet."
+        assert isinstance(
+            self.train_params["epochs"], int
+        ), f"Epochs should be an integer value."
 
     def _map_unique_classes(self, is_partial=False):
         """
@@ -196,7 +202,7 @@ class Trainer(BaseClass):
             cbs.append(EarlyStoppingCallback(patience=10))
         return cbs
 
-    def _get_y(self, x):
+    def get_y(self, x):
         """
         Get the mask for a given image. Label function for SegmentationDataLoaders.
 
@@ -296,7 +302,7 @@ class Trainer(BaseClass):
                 len(image_files),
             )
 
-        label_func = partial(self._get_y)
+        label_func = partial(self.get_y)
 
         dls = SegmentationDataLoaders.from_label_func(
             self.train_images_dir,
@@ -310,13 +316,13 @@ class Trainer(BaseClass):
         )
         return dls
 
-    def run(self):
+    def set_learner(self):
         """
-        Train a model based on the given parameters. It supports both HRNet and U-Net architectures.
-        It applies image augmentations, creates dataloaders, sets up the model, and finally trains it.
-
-        Returns:
-            str: Path to the saved trained model.
+        Initializes the learner with the appropriate architecture, data transformations,
+        and dataloaders. It sets up the model directory and checks the dataset balance.
+        Depending on whether a pretrained model is used or not, it either assigns the
+        dataloaders to the existing learner or creates a new learner with the specified
+        parameters.
         """
         self.model_name = f"{self.train_params['architecture']}_{timestamp()}"
         self.run_dir = BaseClass.create_if_not_exists(self.models_dir / self.model_name)
@@ -327,11 +333,10 @@ class Trainer(BaseClass):
 
         if self.train_params["pretrained"]:
             self.learner.dls = dls
-        else:
 
+        else:
             # if self.params["distance_weighting"]: # not functional
             #     self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
-
             if self.train_params["architecture"].lower() == "hrnet":
                 self.learner = get_segmentation_learner(
                     dls,
@@ -366,6 +371,16 @@ class Trainer(BaseClass):
                     loss_func=loss_functions.get(self.train_params["loss_function"]),
                     metrics=[Dice(), JaccardCoeff()],
                 )
+
+    def run(self):
+        """
+        Train a model based on the given parameters. It supports both HRNet and U-Net architectures.
+        It sets up the model, and finally trains it.
+
+        Returns:
+            str: Path to the saved trained model.
+        """
+        self.set_learner()
 
         self.learner.fit_one_cycle(self.train_params["epochs"], cbs=self._callbacks())
         model_path = self._save()
