@@ -16,6 +16,8 @@ The configuration file is divided into three main sections:
 
 **seed:** An integer value used for random seed setting, ensuring reproducibility.
 
+**test_size**: The fraction of the dataset used for testing and validation. Must be a number between 0 and 1.
+
 ## Data Settings
 
 **erosion:** A boolean value (true or false) indicating whether erosion is applied in the data processing step.

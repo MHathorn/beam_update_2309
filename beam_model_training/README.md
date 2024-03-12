@@ -14,6 +14,9 @@ The expected folder structure is as follow (set the location of project_director
 
 Run the install.bat file as suggested by the documentation. After the installation has completed, the beam environment should have been created and made available to use.
 
+On Linux:
+sudo chown -R adm.nkiner@global.un.org:root /anaconda/envs/beam/
+
 ### PYTHONPATH
 
 In order to run the scripts from the `beam_model_training`, this directory must be added to the PYTONPATH environment variable. Run the command in git bash:
