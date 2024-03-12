@@ -1,0 +1,18 @@
+# GENERAL SETTINGS
+codes: ["Background", "Building"]
+seed: 2022
+# DATA SETTINGS
+test_size: 0.2
+tiling:
+  tile_labels: false
+  distance_weighting: true
+  erosion: true
+  tile_size: 256
+# MODEL SETTINGS
+model_version: U-Net_20240117-1630 # required for evaluation or retraining
+train:
+  architecture: U-Net
+  backbone: resnet18
+  epochs: 10
+  loss_function: None
+training: true

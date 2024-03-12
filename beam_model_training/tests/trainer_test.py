@@ -10,13 +10,14 @@ from fastai.vision.all import PILMask
 from preprocess.data_tiler import DataTiler
 from preprocess.transform import gen_train_test
 from segmentation.train import Trainer
+import yaml
 
-default_config = {
+base_config = {
     "config_name": "satellite_config",
     "config_value": {
         "seed": 2022,
         "codes": ["Background", "Building"],
-        "tile_size": 512,
+        "tile_size": 256,
         "test_size": 0.2,
         "train": {
             "architecture": "u-net",
@@ -28,12 +29,27 @@ default_config = {
         "root_dir": "satellite",
     },
 }
+
+
+def create_config(name, base_config, **kwargs):
+    # Create a copy of the base config to avoid mutating the original
+    config = dict(base_config)
+    config["config_name"] = name  # Update the config_name
+    config["config_value"].update(kwargs)  # Update any additional settings
+    return config
+
+
 mock_configs = {
-    "sat_unet": default_config,
-    "aerial_unet": dict(default_config, root_dir="aerial"),
-    "sat_hrnet_w18": dict(default_config, architecture="HRNet", backbone="hrnet_w18"),
-    "aerial_hrnet_w18": dict(
-        default_config, root_dir="aerial", architecture="HRNet", backbone="hrnet_w18"
+    "satellite_unet": base_config,
+    "aerial_unet": create_config("aerial_unet", base_config),
+    "satellite_hrnet_w18": create_config(
+        "satellite_hrnet_w18", base_config, architecture="HRNet", backbone="hrnet_w18"
+    ),
+    "aerial_hrnet_w18": create_config(
+        "aerial_hrnet_w18",
+        base_config,
+        architecture="HRNet",
+        backbone="hrnet_w18",
     ),
 }
 
@@ -46,24 +62,44 @@ class TestTrainer:
     @pytest.fixture(
         scope="class", params=mock_configs.values(), ids=mock_configs.keys()
     )
-    def config(self, request: pytest.FixtureRequest):
-        return request.param["config_value"]
+    def mock_config(self, request: pytest.FixtureRequest):
+        return request.param
 
     @pytest.fixture
-    def trainer(self, config: Any):
-        current_dir = Path(__file__).parent.resolve()
-        config["root_dir"] = current_dir / config["root_dir"]
-        tiles_path = config["root_dir"] / Trainer.DIR_STRUCTURE["image_tiles"]
+    def trainer(
+        self, mock_config: Any, request: pytest.FixtureRequest, tmp_path_factory
+    ):
+        name, config = mock_config["config_name"], mock_config["config_value"]
+        root_dir = Path("beam_model_training/tests") / name.split("_")[0]
+        tmp_path = tmp_path_factory.mktemp("trainer_test")
+        test_dir = tmp_path / name
+        config_name = f"{name}_config.yaml"
+
+        # Generate tiles once in the main directory
+        tiles_path = root_dir / Trainer.DIR_STRUCTURE["image_tiles"]
         if not tiles_path.exists():
-            data_tiler = DataTiler(config)
-            data_tiler.generate_tiles(config["tiling"]["tile_size"])
-            gen_train_test(config["root_dir"], test_size=config["test_size"])
+            data_tiler = DataTiler(root_dir, "test_config.yaml")
+            data_tiler.generate_tiles(config["tile_size"])
+            gen_train_test(root_dir, test_size=config["test_size"])
+
         try:
-            yield Trainer(config)
+            # Copy the entire file structure from root_dir to the temporary directory.
+            if root_dir.exists():
+                for item in root_dir.iterdir():
+                    s = root_dir / item.name
+                    d = test_dir / item.name
+                    if s.is_dir():
+                        shutil.copytree(s, d)
+                    else:
+                        shutil.copy2(s, d)
+
+            # Write the configuration data to the temporary YAML file.
+            with open(test_dir / config_name, "w") as file:
+                yaml.dump(config, file)
+            yield Trainer(test_dir, config_name)
         finally:
             # Clean up after tests.
             time.sleep(3)
-            shutil.rmtree(config["root_dir"] / Trainer.DIR_STRUCTURE["models"])
 
     def test_map_unique_classes(self, trainer: Trainer):
 
@@ -74,7 +110,7 @@ class TestTrainer:
 
         assert isinstance(result, dict), "Result should be a dictionary"
         print(result)
-        assert len(result.keys()) == 2, "Result should contain 4 unique classes"
+        assert len(result.keys()) == 2, "Result should contain 2 unique classes"
         assert result == {
             0: 0,
             1: 255,
@@ -84,14 +120,15 @@ class TestTrainer:
         result_partial = trainer._map_unique_classes(is_partial=True)
         assert isinstance(result_partial, dict), "Result should be a dictionary"
 
-    def test_get_mask_shape(self, config, trainer):
+    def test_get_mask_shape(self, mock_config, trainer):
         pixel_to_class = {0: 0, 1: 255}
-        image_path = next(trainer.images_dir.iterdir())
+        tile_size = mock_config["config_value"]["tile_size"]
+        image_path = next(trainer.train_images_dir.iterdir())
         mask = trainer._get_mask(image_path, pixel_to_class)
         assert isinstance(mask, PILMask)
         assert mask.size == (
-            config["tiling"]["tile_size"],
-            config["tiling"]["tile_size"],
+            tile_size,
+            tile_size,
         )
 
     def test_run(self, trainer):
@@ -114,9 +151,9 @@ class TestTrainer:
             )
 
             # Assert that the fit_one_cycle method was called on the learner instance
-            if trainer.architecture.lower() == "hrnet":
+            if trainer.train_params["architecture"].lower() == "hrnet":
                 mock_get_segmentation_learner.fit_one_cycle.assert_called_once()
-            elif trainer.architecture.lower() == "u-net":
+            elif trainer.train_params["architecture"].lower() == "u-net":
                 mock_unet_learner.fit_one_cycle.assert_called_once()
 
             MockSave.assert_called_once()
