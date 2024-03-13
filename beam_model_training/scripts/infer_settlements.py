@@ -1,5 +1,6 @@
 # Example usage
 import argparse
+import logging
 from pathlib import Path
 import pandas as pd
 from segmentation.infer import MapGenerator
