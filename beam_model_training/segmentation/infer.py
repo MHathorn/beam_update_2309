@@ -192,6 +192,13 @@ class MapGenerator(BaseClass):
         grouped_tiles : pd.Series
             A pandas Series where each entry is a list of tile names associated with a merged settlement group. The index of the Series is a MultiIndex with levels [f'{primary_key}_group', 'geometry'].
         """
+
+        if primary_key not in boundaries_gdf.columns:
+            raise KeyError(
+                f"The primary_key '{primary_key}' is not present in the boundaries_gdf columns. "
+                f"Please update the dataframe, or choose a key from the following columns as primary key argument: {list(boundaries_gdf.columns)}"
+            )
+
         # Create a GeoDataFrame from the list of tiles
         data = [
             {"name": da.name, "geometry": box(*da.rio.bounds())} for da in mask_tiles

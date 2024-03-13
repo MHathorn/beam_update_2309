@@ -24,6 +24,14 @@ if __name__ == "__main__":
         default="project_config.yaml",
         help="The configuration file name. Defaults to 'project_config.yaml'.",
     )  # optional
+    parser.add_argument(
+        "-p",
+        "--primary_key",
+        type=str,
+        default="OBJECTID",
+        help="The primary key identifying each individual settlement in the settlements file. \
+            This defaults to OBJECTID for informal settlement boundaries in the SICA region.",
+    )  # optional
 
     args = parser.parse_args()
 
