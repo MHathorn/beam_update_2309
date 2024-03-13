@@ -100,4 +100,4 @@ def gen_train_test(root_dir, test_size=0.2, seed=2022, distance_weighting=False)
                             f"Couldn't find corresponding {tile} file for {file_path.name}."
                         )
 
-            print(f"Moved {len(files)} files to '{dir_name}_{tile}s' directory.")
+            logging.info(f"Moved {len(files)} files to '{dir_name}_{tile}s' directory.")

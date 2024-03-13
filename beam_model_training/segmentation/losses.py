@@ -54,9 +54,6 @@ class WeightedCrossCombinedLoss:
         self.dice_loss = DiceLoss(axis, smooth)
 
     def __call__(self, pred, targ):
-        print("pred:", pred.shape)
-        print("targ:", targ.shape)
-        print("targ[0], targ[1]:", targ[0].shape, targ[1].shape)
         targ, weights = targ[0], targ[1]
         ce_loss = self.cross_entropy_loss(pred, targ)
         weighted_ce_loss = (ce_loss * weights).mean()

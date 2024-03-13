@@ -19,6 +19,10 @@ from tqdm import tqdm
 from utils.base_class import BaseClass
 from utils.helpers import seed
 
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 
 class DataTiler(BaseClass):
     """
@@ -90,10 +94,10 @@ class DataTiler(BaseClass):
 
         if not valid_label_paths:
             self.labels = None
-            print(
+            logging.warning(
                 "No labels file provided. Tiling images alone."
                 if not labels_dir.exists() or len(list(labels_dir.iterdir())) == 0
-                else "Warning: Label files are not in recognized format (shp, csv). Tiling images alone."
+                else "Label files are not in recognized format (shp, csv). Tiling images alone."
             )
         else:
             write_dirs += ["mask_tiles"]
@@ -167,7 +171,7 @@ class DataTiler(BaseClass):
         buildings = pd.DataFrame()
 
         for labels_path in labels_files:
-            print(f"Loading label file {labels_path.name}..")
+            logging.info(f"Loading label file {labels_path.name}..")
             if labels_path.suffix.lower() == ".csv":
                 df = _load_from_gob(labels_path)
 
@@ -182,10 +186,10 @@ class DataTiler(BaseClass):
 
             buildings = pd.concat([buildings, df])
 
-        print("Deduplicating..")
+        logging.info("Deduplicating..")
         buildings = buildings.drop_duplicates()
 
-        print(f"Loaded {len(buildings)} labels for the imaged region.")
+        logging.info(f"Loaded {len(buildings)} labels for the imaged region.")
         return buildings
 
     def _crop_labels(self, image):
@@ -331,11 +335,11 @@ class DataTiler(BaseClass):
             tile_size = self.tiling_params["tile_size"]
 
         for idx, image in enumerate(self.images_generator):
-            print(f"Tiling image {image.name}.. ({idx+1}/{self.n_images})")
+            logging.info(f"Tiling image {image.name}.. ({idx+1}/{self.n_images})")
             # Load image and corresponding mask as numpy array and retrieve their shape
 
             # Fix CRS with first image.
-            print("Preparing inputs..")
+            logging.info("Preparing inputs..")
             if self.crs is None:
                 self.crs = image.rio.crs
                 if self.labels is not None and self.labels.crs != self.crs:
@@ -347,7 +351,7 @@ class DataTiler(BaseClass):
             if self.labels is not None:
                 labels = self._crop_labels(image)
                 if labels.empty:
-                    print(
+                    logging.warning(
                         f"No intersecting labels found for {image.name}. Skipping image."
                     )
                     continue

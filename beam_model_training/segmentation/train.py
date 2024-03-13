@@ -246,7 +246,7 @@ class Trainer(BaseClass):
         plt.gca().spines["top"].set_color("none")
         plt.gca().spines["right"].set_color("none")
         plt.savefig(self.run_dir / "dataset_balance.png")
-        print(
+        logging.info(
             f"Mean Percentage of Pixels Belonging to Buildings: {100 * round(sum(percentages) / len(percentages), 3)}%"
         )
         return percentages

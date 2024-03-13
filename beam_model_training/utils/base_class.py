@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 import shutil
 import yaml
@@ -150,7 +151,7 @@ class BaseClass:
         if not dir_path.exists():
             dir_path.mkdir(parents=True)
         elif overwrite and any(dir_path.iterdir()):
-            print(
+            logging.warning(
                 f"Warning: {dir_path.name} directory is not empty. Overwriting files."
             )
             shutil.rmtree(dir_path)  # Delete the directory and its contents

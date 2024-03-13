@@ -1,6 +1,12 @@
 import argparse
+import logging
+
 from preprocess.data_tiler import DataTiler
 from preprocess.transform import gen_train_test
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 def main(args):

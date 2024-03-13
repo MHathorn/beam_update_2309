@@ -59,5 +59,7 @@ if __name__ == "__main__":
                 Use the `--generate_tiles` option to create them before sampling."
             )
 
+    logging.info("Creating sample population..")
     sampled_tile_paths = sample_tiles(input_dir, root_path / "AOIs", args.sample_size)
+    logging.info("Generating sample directory..")
     create_sample_dir(input_dir, sampled_tile_paths)
