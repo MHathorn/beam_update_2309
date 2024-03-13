@@ -104,7 +104,6 @@ class TestTrainer:
         result = trainer._map_unique_classes()
 
         assert isinstance(result, dict), "Result should be a dictionary"
-        print(result)
         assert len(result.keys()) == 2, "Result should contain 2 unique classes"
         assert result == {
             0: 0,

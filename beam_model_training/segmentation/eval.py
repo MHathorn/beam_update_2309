@@ -1,6 +1,7 @@
 import argparse
 from datetime import datetime
 from itertools import islice
+import logging
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -10,10 +11,15 @@ import rasterio
 import rioxarray as rxr
 from fastai.vision.all import load_learner
 from PIL import Image, ImageDraw
+
 from segmentation.infer import MapGenerator
 from segmentation.train import Trainer
 from utils.base_class import BaseClass
 from utils.helpers import crs_to_pixel_coords, seed
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 class Evaluator(BaseClass):
@@ -131,12 +137,12 @@ class Evaluator(BaseClass):
                     else:
                         output_path = self.eval_dir / f"eval_pred_{image_file}"
                         img.save(output_path)
-                        print(
+                        logging.info(
                             f"Image file {output_path.name} written to `{output_path.parent.name}`."
                         )
 
             else:
-                print(f"Image file {image_file} not found.")
+                logging.warning(f"Image file {image_file} not found.")
 
     def compute_metrics(self, map_gen, iou_threshold=0.5):
         """
@@ -217,7 +223,7 @@ class Evaluator(BaseClass):
 
                 num_files += 1
             else:
-                print(f"Predicted mask for {groundtruth_path} not found.")
+                logging.warning(f"Predicted mask for {groundtruth_path} not found.")
 
         if num_files > 0:
             # Compute aggregated metrics

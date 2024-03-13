@@ -1,3 +1,4 @@
+import logging
 import random
 from datetime import datetime
 from pathlib import Path
@@ -7,8 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytz
 import rioxarray as rxr
+from tqdm import tqdm
 import xarray as xr
-import yaml
 from fastai.vision.all import set_seed, torch, PILImage
 
 
@@ -113,9 +114,8 @@ def multiband_to_png(file_path, output_dir):
     try:
         img = get_rgb_channels(tiff_file)
         plt.imsave(png_file, np.transpose(img.values, (1, 2, 0)))
-        print(f"Converted {tiff_file} to {png_file}")
     except Exception as e:
-        print(f"An error occurred while converting {tiff_file}: {e}")
+        logging.error(f"An error occurred while converting {tiff_file}: {e}")
 
 
 def get_tile_size(image_path):
@@ -137,19 +137,17 @@ def copy_leaf_files(src_dir, dest_dir):
 
     src_dir = Path(src_dir)
     dest_dir = Path(dest_dir)
-    for src_file_path in src_dir.rglob('*'):
+    for src_file_path in tqdm(src_dir.rglob("*"), total=len(src_dir.rglob("*"))):
         if src_file_path.is_file():
             # Determine the relative path from the source directory
             rel_path = src_file_path.relative_to(src_dir)
             dest_path = dest_dir / rel_path
-            
+
             # Ensure the destination directory exists
             dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-            
             # Copy each file in the current directory to the destination directory
             if not dest_path.exists():
-                    shutil.copy2(src_file_path, dest_path)
-                    print(f"Copied: {src_file_path} to {dest_path}")
+                shutil.copy2(src_file_path, dest_path)
             else:
-                print(f"File already exists, not overwriting: {dest_path}")
+                logging.warning(f"File already exists, not overwriting: {dest_path}")

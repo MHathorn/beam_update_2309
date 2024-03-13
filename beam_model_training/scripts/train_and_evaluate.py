@@ -1,9 +1,14 @@
 import argparse
+import logging
 import os
 import ssl
 
 from segmentation.train import Trainer
 from segmentation.eval import Evaluator
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 def main(args):

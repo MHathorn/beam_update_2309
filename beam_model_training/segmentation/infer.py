@@ -23,7 +23,9 @@ from segmentation.train import Trainer
 from utils.base_class import BaseClass
 from utils.helpers import get_rgb_channels, seed
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 class MapGenerator(BaseClass):
@@ -97,10 +99,10 @@ class MapGenerator(BaseClass):
             # Get the first image file
             img_file = next(images_dir_path.glob("*"))  # Adjust the pattern as needed
             img = rxr.open_rasterio(img_file)
-            print(f"CRS now initialized to {img.rio.crs}.")
+            logging.info(f"CRS now initialized to {img.rio.crs}.")
             return img.rio.crs
         else:
-            print("Warning: CRS could not be set at initialization.")
+            logging.warning("CRS could not be set at initialization.")
 
     def _get_image_files(self, images_dir):
         """
@@ -348,7 +350,6 @@ class MapGenerator(BaseClass):
         output_da = output_da.rio.write_crs(self.crs)
         output_da = output_da.rio.write_transform(tile.rio.transform())
         output_da.rio.to_raster(inference_path)
-        print(f"Saving output to {inference_path}")
 
         # Generate shapefile
         if write_shp:
@@ -407,7 +408,7 @@ class MapGenerator(BaseClass):
                     try:
                         result = future.result()
                     except Exception as e:
-                        print(f"An exception occurred: {e}")
+                        logging.error(f"An exception occurred: {e}")
                         continue
                     if result is not None:
                         output_files.append(result)

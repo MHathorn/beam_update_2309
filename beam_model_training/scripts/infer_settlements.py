@@ -5,8 +5,9 @@ import pandas as pd
 from segmentation.infer import MapGenerator
 import geopandas as gpd
 
-from utils.helpers import seed
-
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

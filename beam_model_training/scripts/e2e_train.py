@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 
 from preprocess.data_tiler import DataTiler
@@ -6,6 +7,10 @@ from preprocess.transform import gen_train_test
 from segmentation.train import Trainer
 from segmentation.eval import Evaluator
 from utils.helpers import seed
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 def prepare_data(project_dir, config_name):
