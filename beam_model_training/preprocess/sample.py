@@ -1,32 +1,19 @@
+from functools import partial
 import json
-from math import log
+import logging
 from pathlib import Path
+from random import sample
+import shutil
 
 import geopandas as gpd
 import pandas as pd
 import rioxarray as rxr
+
+from concurrent.futures import ProcessPoolExecutor
 from shapely.geometry import box
 from tqdm import tqdm
-from utils.helpers import crs_to_pixel_coords, seed
-
-
-def load_tile_info(tile_path):
-    """
-    Load a raster tile using rioxarray and extract its metadata.
-
-    Args:
-        tile_path (str or Path): The file path to the raster tile.
-
-    Returns:
-        tuple: A tuple containing the loaded tile as an xarray DataArray,
-               the number of buildings as an integer, and the probability score as a float.
-    """
-    tile = rxr.open_rasterio(tile_path)
-    num_buildings = tile.attrs.get("num_buildings", 0)
-    probability_score = tile.attrs.get(
-        "probability_score", 1
-    )  # Default to 1 (high confidence)
-    return tile, num_buildings, probability_score
+from utils.base_class import BaseClass
+from utils.helpers import crs_to_pixel_coords, multiband_to_png, seed
 
 
 def tile_in_settlement(tile, settlements):
@@ -49,25 +36,22 @@ def tile_in_settlement(tile, settlements):
     return any(settlements.intersects(tile_geom))
 
 
-def calculate_score(num_buildings, probability_score):
-    """
-    Calculate a score for a tile based on the number of buildings and probability score from the Google Open Buildings dataset.
-
-    Args:
-        num_buildings (int): The number of buildings detections in the tile.
-        probability_score (float): The probability score associated with the tile.
-
-    Returns:
-        float: The calculated sampling score for the tile.
-    """
-    if num_buildings > 0:
-        return (1 - probability_score) * log(num_buildings)
-    return 0
+def include_tile(tile_path, settlements):
+    """Function to map each tile to an inclusion decision in distributed sample population creation below."""
+    try:
+        tile = rxr.open_rasterio(tile_path)
+        if tile_in_settlement(tile, settlements):
+            return tile_path
+        else:
+            return None
+    except Exception as e:
+        logging.error(f"Error verifying {tile_path}: {e}")
+        return None
 
 
 def sample_tiles(tile_directory, shp_dir, sample_size, seed_id=2022):
     """
-    Sample a set of raster tiles from informal settlements based on scores calculated from pseudo-labels.
+    Sample a set of raster tiles from informal settlements.
 
     Args:
         tile_directory (str or Path): The directory containing raster tiles.
@@ -86,28 +70,63 @@ def sample_tiles(tile_directory, shp_dir, sample_size, seed_id=2022):
             df = gpd.read_file(file_path)
             settlements = pd.concat([settlements, df])
 
+    include_tile_with_settlements = partial(include_tile, settlements=settlements)
+
     # Load tiles and calculate scores
-    tile_scores = []
-    for tile_path in tqdm(list(tile_dir.iterdir())):
-        tile, num_buildings, probability_score = load_tile_info(tile_path)
-        if tile_in_settlement(tile, settlements):
-            score = calculate_score(num_buildings, probability_score)
-            tile_scores.append((tile_path, score))
+    with ProcessPoolExecutor() as executor:
+        settlement_tiles = list(
+            tqdm(
+                executor.map(include_tile_with_settlements, tile_dir.iterdir()),
+                total=len(list(tile_dir.iterdir())),
+            )
+        )
 
-    # Convert to DataFrame for easier handling
-    df = pd.DataFrame(tile_scores, columns=["tile_path", "score"])
+    settlement_tiles = [tile for tile in settlement_tiles if tile is not None]
 
-    # Normalize and sample
-    df["normalized_score"] = df["score"] / df["score"].sum()
-    sampled_tiles = df.sample(n=sample_size, weights="normalized_score")
+    if len(settlement_tiles) < sample_size:
+        logging.warning(
+            f"The total population of settlement tiles is lower than sample size. Returning all {len(settlement_tiles)} tiles."
+        )
+        return settlement_tiles
 
-    return sampled_tiles["tile_path"].tolist()
+    # Generate sample of tiles
+    sampled_tile_paths = sample(settlement_tiles, sample_size)
+
+    return sampled_tile_paths
+
+
+def create_sample_dir(image_tiles_dir, sampled_tile_paths):
+    """
+    Copies sampled tiles to a 'sample/images' directory and converts them to PNG format in a 'sample/png' directory.
+
+    Args:
+        image_tiles_dir (str or Path): The directory containing the original image tiles.
+        sampled_tile_paths (list of Path): A list of paths to the image tiles that have been sampled.
+
+    """
+    output_dir = BaseClass.create_if_not_exists(
+        image_tiles_dir.parent / "sample/images", overwrite=True
+    )
+
+    png_output_dir = BaseClass.create_if_not_exists(
+        image_tiles_dir.parent / "sample/png", overwrite=True
+    )
+
+    for file_path in tqdm(sampled_tile_paths):
+        try:
+            shutil.copy2(file_path, output_dir / file_path.name)
+            multiband_to_png(file_path, png_output_dir)
+        except Exception as e:
+            logging.error(f"An error occurred while processing {file_path}: {e}")
 
 
 def generate_label_json(label_file, tiff_file, output_file, tile_size=512):
     """
     Generate a JSON file containing label data  in LabelStudio's expected format for a given image tile.
     See: https://labelstud.io/guide/predictions
+
+    Note: This is unused and likely not usable as is - leaving here for possible
+    future development with LabelStudio Enterprise.
 
     Args:
         label_file (str or Path): The file path to the vector data (shapefile) containing labels.
