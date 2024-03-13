@@ -105,11 +105,11 @@ def create_sample_dir(image_tiles_dir, sampled_tile_paths):
 
     """
     output_dir = BaseClass.create_if_not_exists(
-        image_tiles_dir.parent / "sample/images", overwrite=True
+        image_tiles_dir.parent / "sample/images", overwrite=False
     )
 
     png_output_dir = BaseClass.create_if_not_exists(
-        image_tiles_dir.parent / "sample/png", overwrite=True
+        image_tiles_dir.parent / "sample/png", overwrite=False
     )
 
     for file_path in tqdm(sampled_tile_paths):
