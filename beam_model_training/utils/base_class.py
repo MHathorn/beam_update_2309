@@ -119,13 +119,14 @@ class BaseClass:
             model_version_dir = (
                 project_dir / self.DIR_STRUCTURE["pretrained"] / model_version
             )
-            pickle_files = list(model_version_dir.glob(f"{model_version}*"))
         else:
             model_version_dir = self.models_dir / model_version
-            if not model_version_dir.exists():
-                raise ValueError(f"Couldn't find model under {model_version_dir}.")
-            # Find all pickle files in the directory
-            pickle_files = list(model_version_dir.glob("*.pkl"))
+        if not model_version_dir.exists():
+            raise ValueError(
+                f"Couldn't find model directory {model_version_dir} for {'pretraining' if pretrained else 'evaluation'}."
+            )
+        # Find all pickle files in the directory
+        pickle_files = list(model_version_dir.glob("*.pkl"))
 
         # Check if there is exactly one pickle file
         if len(pickle_files) != 1:

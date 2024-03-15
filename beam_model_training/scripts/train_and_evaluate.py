@@ -17,9 +17,11 @@ def main(args):
     ssl._create_default_https_context = ssl._create_unverified_context
 
     trainer = Trainer(args.project_dir, args.config_name)
-    trainer.run()
+    model_path = trainer.run()
 
-    evaluator = Evaluator(args.project_dir, args.config_name)
+    evaluator = Evaluator(
+        args.project_dir, args.config_name, model_path=model_path, generate_preds=True
+    )
     evaluator.evaluate(n_images=args.n_images)
 
 
@@ -45,7 +47,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_images",
         type=int,
-        default=0,
+        default=10,
         help="The number of images of tiles with detections to generate during evaluation.",
     )
 

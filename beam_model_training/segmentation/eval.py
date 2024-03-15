@@ -65,10 +65,10 @@ class Evaluator(BaseClass):
         """
 
         self.root_dir = super()._set_project_dir(project_dir)
-        self.config = super().load_config(self.root_dir / config_name)
-        seed(self.config["seed"])
+        self.config_name = config_name
+        config = super().load_config(self.root_dir / config_name)
+        seed(config["seed"])
 
-        self.model_version = self.config["model_version"]
         self.generate_preds = generate_preds
         read_dirs = ["test_images", "test_masks", "models", "eval"]
         write_dirs = []
@@ -77,15 +77,17 @@ class Evaluator(BaseClass):
         else:
             read_dirs += ["shapefiles", "predictions"]
         super().__init__(self.root_dir, read_dirs=read_dirs, write_dirs=write_dirs)
-        try:
+        if model_path:
+            self.model_version = model_path.stem
+            model_path = model_path
+        else:
+            try:
+                self.model_version = config["model_version"]
+                model_path = super().load_model_path(self.root_dir, self.model_version)
+            except KeyError as e:
+                raise KeyError(f"Config must have a value for {e}.")
 
-            model_path = model_path or super().load_model_path(
-                self.root_dir, self.model_version
-            )
-            self.model = load_learner(model_path)
-
-        except KeyError as e:
-            raise KeyError(f"Config must have a value for {e}.")
+        self.model = load_learner(model_path)
 
     def overlay_shapefiles_on_images(self, n_images, show=False):
         """
@@ -103,7 +105,7 @@ class Evaluator(BaseClass):
         ]
         for shapefile in islice(shapefiles, 0, n_images):
             # Construct the corresponding image file path
-            image_file = shapefile.name.replace("_predicted.shp", ".tif")
+            image_file = shapefile.name.replace("_predicted.shp", ".TIF")
             image_path = self.test_images_dir / image_file
 
             if image_path.exists():
@@ -264,8 +266,10 @@ class Evaluator(BaseClass):
         iou_threshold : float, optional
             The IoU threshold to consider when calculating building-level precision and recall (default: 0.5).
         """
+        map_gen = MapGenerator(
+            self.root_dir, self.config_name, generate_preds=self.generate_preds
+        )
         if self.generate_preds:
-            map_gen = MapGenerator(self.config, generate_preds=True)
             map_gen.create_tile_inferences()
         self.overlay_shapefiles_on_images(n_images)
         metrics = self.compute_metrics(map_gen, iou_threshold)

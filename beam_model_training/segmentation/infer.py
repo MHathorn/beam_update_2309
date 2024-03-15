@@ -45,7 +45,7 @@ class MapGenerator(BaseClass):
     -------
     _get_image_files(images_dir):
         Retrieve a list of image files from the specified directory.
-    _create_shp_from_mask(mask_da):
+    create_shp_from_mask(mask_da):
         Creates a GeoDataFrame from a binary mask DataArray.
     _group_tiles_by_connected_area(mask_tiles, boundaries_gdf, primary_key):
         Groups tiles by connected area for vectorization.
@@ -127,7 +127,7 @@ class MapGenerator(BaseClass):
         )
         return image_files
 
-    def _create_shp_from_mask(self, mask_da):
+    def create_shp_from_mask(self, mask_da):
         """
         Creates a GeoDataFrame from a binary mask DataArray.
 
@@ -288,8 +288,9 @@ class MapGenerator(BaseClass):
             combined = merge_arrays(settlement_tiles)
             combined.name = pkey
 
-            gdf = self._create_shp_from_mask(combined)
+            gdf = self.create_shp_from_mask(combined)
             gdfs.append(gdf)
+            
         all_buildings = gpd.GeoDataFrame(
             pd.concat(gdfs), geometry="geometry", crs=self.crs
         )
@@ -345,7 +346,7 @@ class MapGenerator(BaseClass):
                 else (output - output_min) / (output_max - output_min)
             )
 
-        inference_path = self.predictions_dir / f"{image_file.stem}_inference.TIF"
+        inference_path = self.predictions_dir / f"{image_file.stem}_INFERENCE.TIF"
 
         # Create a DataArray from the output and assign the coordinate reference system and affine transform from original tile
         output_da = xr.DataArray(
@@ -361,7 +362,7 @@ class MapGenerator(BaseClass):
         # Generate shapefile
         if write_shp:
             shp_path = self.shapefiles_dir / f"{image_file.stem}_predicted.shp"
-            vector_df = self._create_shp_from_mask(output_da)
+            vector_df = self.create_shp_from_mask(output_da)
             vector_df.to_file(
                 shp_path,
                 driver="ESRI Shapefile",
