@@ -59,9 +59,7 @@ class MapGenerator(BaseClass):
         Orchestrates the inference process across all tiles in the specified directory, optionally merging results based on settlement boundaries.
     """
 
-    def __init__(
-        self, project_dir, config_name="project_config.yaml", generate_preds=False
-    ):
+    def __init__(self, project_dir, config_name=None, generate_preds=False):
         """
         Constructs all the necessary attributes for the MapGenerator object.
 
@@ -72,26 +70,25 @@ class MapGenerator(BaseClass):
             project_dir : str
                 Path to the project directory, containing one or more models, as well as images and settlement boundaries (optional) for map generation.
             config_name : str
-                Name of the config file. Defaults to project_config.yaml.
+                The configuration file name. If missing, the constructor will look for a single file in the project directory.
         """
 
-        self.root_dir = super()._set_project_dir(project_dir)
-        config = super().load_config(self.root_dir / config_name)
-        seed(config["seed"])
+        super().__init__(project_dir, config_name)
+        seed(self.config["seed"])
         read_dirs = ["test_images", "models"]
         prediction_dirs = ["predictions", "shapefiles"]
         self.generate_preds = generate_preds
         if self.generate_preds:
             super().__init__(
-                self.root_dir, read_dirs=read_dirs, write_dirs=prediction_dirs
+                self.project_dir, read_dirs=read_dirs, write_dirs=prediction_dirs
             )
         else:
-            super().__init__(self.root_dir, read_dirs=(read_dirs + prediction_dirs))
-        if config.get("model_version"):
-            model_path = super().load_model_path(self.root_dir, config["model_version"])
+            super().__init__(self.project_dir, read_dirs=(read_dirs + prediction_dirs))
+        if self.config.get("model_version"):
+            model_path = super().load_model_path(self.config["model_version"])
             self.model = load_learner(model_path)
         self.crs = self.get_crs(self.test_images_dir)
-        self.erosion = config["tiling"]["erosion"]
+        self.erosion = self.config["tiling"]["erosion"]
 
     def get_crs(self, images_dir):
         images_dir_path = Path(images_dir)
@@ -290,7 +287,7 @@ class MapGenerator(BaseClass):
 
             gdf = self.create_shp_from_mask(combined)
             gdfs.append(gdf)
-            
+
         all_buildings = gpd.GeoDataFrame(
             pd.concat(gdfs), geometry="geometry", crs=self.crs
         )
@@ -513,8 +510,7 @@ if __name__ == "__main__":
         "-c",
         "--config_name",
         type=str,
-        default="project_config.yaml",
-        help="The configuration file name. Defaults to 'project_config.yaml'.",
+        help="The configuration file name. If missing, the constructor will look for a single file in the project directory.",
     )  # optional
     parser.add_argument(
         "--generate_preds",

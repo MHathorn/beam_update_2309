@@ -6,7 +6,6 @@ from preprocess.data_tiler import DataTiler
 from preprocess.transform import gen_train_test
 from segmentation.train import Trainer
 from segmentation.eval import Evaluator
-from utils.helpers import seed
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -56,8 +55,7 @@ if __name__ == "__main__":
         "-c",
         "--config_name",
         type=str,
-        help="The name of the configuration file.",
-        default="project_config.yaml",
+        help="The configuration file name. If missing, the constructor will look for a single file in the project directory.",
     )
 
     args = parser.parse_args()

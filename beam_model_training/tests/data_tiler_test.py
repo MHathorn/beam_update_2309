@@ -73,7 +73,7 @@ class Test_DataTiler:
         for file in image_files[:copy_count]:
             shutil.copy2(file, test_dir / DataTiler.DIR_STRUCTURE["images"])
         try:
-            yield DataTiler(test_dir, config_name)
+            yield DataTiler(test_dir)
         finally:
             # Clean up after tests.
             time.sleep(3)
@@ -96,7 +96,7 @@ class Test_DataTiler:
 
     def test_crop_buildings(self, name, data_tiler):
         if name.endswith("single"):
-            labels_path = data_tiler.root_dir / "labels"
+            labels_path = data_tiler.project_dir / "labels"
             valid_label_paths = [
                 l
                 for l in labels_path.glob("*")
@@ -146,7 +146,7 @@ class Test_DataTiler:
             ), f"{name}: Number of images and weight tiles do not match."
         else:
             weight_tiles_dir = (
-                data_tiler.root_dir + data_tiler.DIR_STRUCTURE["weight_tiles"]
+                data_tiler.project_dir + data_tiler.DIR_STRUCTURE["weight_tiles"]
             )
             assert (
                 not weight_tiles_dir.exists()
