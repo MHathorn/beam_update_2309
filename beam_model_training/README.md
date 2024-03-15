@@ -1,43 +1,31 @@
 # BEAM_model_traning
 
-The expected folder structure is as follow (set the location of project_directory to 'ROOT_PATH' in my_paths.py):
+# Development environment - installation steps 
 
-├── project_directory  
-│ ├── images // A list of files in GeoTIFF format.  
-│ │ ├── image.tiff  
-│ ├── labels // A shapefile or csv file (in Google Open Buildings Dataset format) containing all labels for the included images.  
-│ │ ├── label.shp  
-│ ├── models  
-│ │ ├── saved_models.pkl
+## BEAM environment
 
-# Development environment - installation steps
+### Windows
 
-Run the install.bat file as suggested by the documentation. After the installation has completed, the beam environment should have been created and made available to use.
+1. Clone this repository to your Windows machine.
+2. Run the install.bat file as suggested by the documentation. After the installation has completed, the beam environment should have been created and made available to use.
 
-On Linux:
-sudo chown -R adm.nkiner@global.un.org:root /anaconda/envs/beam/
+### Linux (Azure VM Data Science)
 
-### PYTHONPATH
+1. Clone this repository to your Linux machine.
+2. Install Mamba on your machine by following the [installation steps](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html).
+3. Change the current directory in your terminal to your beam_update_2039/ directory, and run the following command to create the BEAM environment.
 
-In order to run the scripts from the `beam_model_training`, this directory must be added to the PYTONPATH environment variable. Run the command in git bash:
+`mamba env create -f unitac-backend/environment_linux.yml`
 
-```bash
-export PYTHONPATH=$PYTHONPATH;/path/to/beam_model_training
-```
+In case of any permissions issues, run through the steps as `sudo` and consult your network administrator to grant r/w permissions for your current user to interact with the Conda environment, data drive and code repository.
 
-or from the beam_model_training directory:
+## VS Code
 
-```bash
-export PYTHONPATH=$PYTHONPATH;$PWD
-```
+In order to use run VS Code within the Mamba environment, you can follow the instructions provided in the [Usage section](https://github.com/conda-forge/miniforge#usage) of miniforge.
 
-Or in the command prompt:
+## PYTHONPATH
 
-```shell
-set PYTHONPATH=%PYTHONPATH%;/path/to/beam_model_training
-```
-
-To fix this permanently for your user, you will need to follow these steps:
+In order to run the scripts from the `beam_model_training`, this directory must be added to the PYTONPATH environment variable. To fix this permanently for your user, follow these steps:
 
 1. Identiy the site packages directory with command:
 
@@ -55,8 +43,13 @@ mkdir -p $USER_SITE_PATH
 3. Create file `pythonpath.pth` in this directory.
 4. Add the path to the `beam_model_training` directory into this file.
 
-TODO: Update the `install.bat` script to create the pythonpath.pth file on initial setup.
+#
 
-## VS Code
+The expected folder structure at the start of a project is as follow:
 
-In order to use run VS Code within the Mamba environment, you can follow the instructions provided in the [Usage section](https://github.com/conda-forge/miniforge#usage) of miniforge.
+├── project_directory  
+│ ├── images/ # A list of files in GeoTIFF format.  
+│ │ ├── image.TIFF  
+│ ├── labels/ # All labels for the included images in shapefile, csv or csv.gz format.  
+│ │ ├── label.shp  
+| ├── project_config.yaml # The project's configuration file.
