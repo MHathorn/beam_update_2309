@@ -3,6 +3,7 @@ from datetime import datetime
 from itertools import islice
 import logging
 
+from pathlib import Path
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,10 +32,12 @@ class Evaluator(BaseClass):
     Args:
     project_dir : str
         Path to the project directory, containing one or more models, as well as images and masks for evaluation.
-    config_name : str
-        Name of the config file. Defaults to project_config.yaml.
+    config_name : str (optional)
+        The configuration file name. If missing, the constructor will look for a single file in the project directory.
     generate_preds : bool
         Flag indicating whether predictions should be generated during evaluation.
+    model_path:
+        The path to the model, if not set by the config file.
 
     Methods
     -------
@@ -49,7 +52,7 @@ class Evaluator(BaseClass):
     def __init__(
         self,
         project_dir,
-        config_name="project_config.yaml",
+        config_name=None,
         generate_preds=False,
         model_path=None,
     ):
@@ -61,13 +64,15 @@ class Evaluator(BaseClass):
         project_dir : str
             Path to the project directory, containing one or more models, as well as images and masks for evaluation.
         config_name : str
-            Name of the config file. Defaults to project_config.yaml.
+            The configuration file name. If missing, the constructor will look for a single file in the project directory.
+        generate_preds : bool
+            Flag indicating whether predictions should be generated during evaluation.
+        model_path:
+            The path to the model, if not set by the config file.
         """
 
-        self.root_dir = super()._set_project_dir(project_dir)
-        self.config_name = config_name
-        config = super().load_config(self.root_dir / config_name)
-        seed(config["seed"])
+        super().__init__(project_dir, config_name)
+        seed(self.config["seed"])
 
         self.generate_preds = generate_preds
         read_dirs = ["test_images", "test_masks", "models", "eval"]
@@ -76,14 +81,13 @@ class Evaluator(BaseClass):
             write_dirs += ["shapefiles", "predictions"]
         else:
             read_dirs += ["shapefiles", "predictions"]
-        super().__init__(self.root_dir, read_dirs=read_dirs, write_dirs=write_dirs)
+        super().load_dir_structure(read_dirs=read_dirs, write_dirs=write_dirs)
         if model_path:
-            self.model_version = model_path.stem
-            model_path = model_path
+            self.model_version = Path(model_path).stem
         else:
             try:
-                self.model_version = config["model_version"]
-                model_path = super().load_model_path(self.root_dir, self.model_version)
+                self.model_version = self.config["model_version"]
+                model_path = super().load_model_path(self.model_version)
             except KeyError as e:
                 raise KeyError(f"Config must have a value for {e}.")
 
@@ -267,7 +271,7 @@ class Evaluator(BaseClass):
             The IoU threshold to consider when calculating building-level precision and recall (default: 0.5).
         """
         map_gen = MapGenerator(
-            self.root_dir, self.config_name, generate_preds=self.generate_preds
+            self.project_dir, self.config_name, generate_preds=self.generate_preds
         )
         if self.generate_preds:
             map_gen.create_tile_inferences()
@@ -296,8 +300,7 @@ if __name__ == "__main__":
         "-c",
         "--config_name",
         type=str,
-        default="project_config.yaml",
-        help="The configuration file name. Defaults to 'project_config.yaml'.",
+        help="The configuration file name. If missing, the constructor will look for a single file in the project directory.",
     )  # optional
     parser.add_argument(
         "--generate_preds",

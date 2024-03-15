@@ -27,7 +27,7 @@ class Trainer(BaseClass):
     such as U-Net and HRNet, and allows for various customizations through the config parameters.
     """
 
-    def __init__(self, project_dir, config_name="project_config.yaml"):
+    def __init__(self, project_dir, config_name=None):
         """
         Initialize the Trainer class with configuration settings.
 
@@ -36,33 +36,32 @@ class Trainer(BaseClass):
         project_dir : str
             Path to the project directory, containing a tiles directory with train and test folders for training.
         config_name : str
-            Name of the config file. Defaults to project_config.yaml.
+            The configuration file name. If missing, the constructor will look for a single file in the project directory.
         """
 
-        self.root_dir = super()._set_project_dir(project_dir)
-        config = super().load_config(self.root_dir / config_name)
+        super().__init__(project_dir, config_name)
 
         # Load and initialize random seed
-        self._load_params(config)
+        self._load_params()
         seed(self.params["seed"])
 
         # Load dirs and create if needed
         training_dirs = ["models", "train_images", "train_masks"]
         # if self.params["distance_weighting"]:
         #     training_dirs.append("train_weights")
-        super().__init__(self.root_dir, read_dirs=training_dirs)
+        super().load_dir_structure(read_dirs=training_dirs)
 
         # Load learning arguments
-        self._load_train_params(config)
+        self._load_train_params()
         self.p2c_map = self._map_unique_classes()
 
         if self.train_params["pretrained"]:
             model_path = super().load_model_path(
-                self.root_dir, config["model_version"], pretrained=True
+                self.config["model_version"], pretrained=True
             )
             self.learner = load_learner(model_path)
 
-    def _load_params(self, config):
+    def _load_params(self):
         """
         Load and assert general params for training.
         Raises:
@@ -71,14 +70,14 @@ class Trainer(BaseClass):
         """
         params_keys = ["seed", "codes", "test_size"]
         try:
-            self.params = {k: config.get(k) for k in params_keys}
+            self.params = {k: self.config.get(k) for k in params_keys}
         except KeyError as e:
             raise KeyError(f"Config must have a value for {e} to run the Trainer.")
 
         if self.params["test_size"] < 0 or self.params["test_size"] > 1:
             raise ValueError("Test size must be a float between 0 and 1.")
 
-    def _load_train_params(self, config):
+    def _load_train_params(self):
         """Loads parameters specific to training."""
         train_keys = [
             "architecture",
@@ -89,7 +88,7 @@ class Trainer(BaseClass):
             "pretrained",
             "early_stopping",
         ]
-        self.train_params = {k: config["train"].get(k) for k in train_keys}
+        self.train_params = {k: self.config["train"].get(k) for k in train_keys}
 
         assert self.train_params["architecture"].lower() in [
             "u-net",
@@ -419,8 +418,7 @@ if __name__ == "__main__":
         "-c",
         "--config_name",
         type=str,
-        default="project_config.yaml",
-        help="The configuration file name. Defaults to 'project_config.yaml'.",
+        help="The configuration file name. If missing, the constructor will look for a single file in the project directory.",
     )  # optional
     args = parser.parse_args()
 

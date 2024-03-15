@@ -35,7 +35,7 @@ class BaseClass:
         "test_weights": "tiles/test/weights",
     }
 
-    def __init__(self, project_dir, read_dirs=[], write_dirs=[]):
+    def __init__(self, project_dir, config_name, read_dirs=[], write_dirs=[]):
         """
         Initializes the BaseClass with the given configuration.
 
@@ -45,26 +45,45 @@ class BaseClass:
             write_dirs (list): List of directory keys to write in. Those directories will be overwritten if files already exist in them.
         """
         self.load_dir_structure(project_dir, read_dirs, write_dirs)
+        self.project_dir = self.set_project_dir(project_dir)
+        self.config_name = self.resolve_config_name(config_name)
+        self.config = self.load_config(project_dir / config_name)
 
-    def _set_project_dir(self, project_dir):
+    def set_project_dir(self, project_dir):
         project_dir_path = Path(project_dir)
         if project_dir_path.exists():
             return project_dir_path
         raise ImportError(f"The project directory {project_dir} could not be found.")
+
+    def resolve_config_name(self, config_name):
+        if config_name:
+            return config_name
+        config_files = list(self.project_dir.glob("*.yaml")) + list(
+            self.project_dir.glob("*.yml")
+        )
+        if len(config_files) == 0:
+            raise FileNotFoundError(
+                "Couldn't find any configuration file in the project. Make sure you've include a .yaml file in the top directory."
+            )
+        if len(config_files) > 1:
+            raise ValueError(
+                "Couldn't resolve the configuration file to be used. Specify a value in the `config_name` argument."
+            )
+        return config_files[0]
 
     def load_config(self, config_path):
         """
         This function loads a configuration file and returns it as a dictionary.
 
         Parameters:
-        config_name (str): The name of the configuration file to load.
+        config_path (str): The path to the configuration file to load.
 
         Returns:
         dict: A dictionary containing the loaded configuration.
         """
 
         if not config_path.exists():
-            raise ImportError(
+            raise ValueError(
                 f"The configuration file not found. Make sure {config_path.name} exists, or provide a different file name."
             )
 
@@ -73,7 +92,7 @@ class BaseClass:
 
         return config
 
-    def load_dir_structure(self, project_dir, read_dirs, write_dirs):
+    def load_dir_structure(self, read_dirs, write_dirs):
         """
         Loads the directory structure based on the provided configuration, read_dirs, and write_dirs.
 
@@ -90,7 +109,7 @@ class BaseClass:
         all_dirs = set(read_dirs + write_dirs)
         for dir_name in all_dirs:
             try:
-                dir_path = project_dir / self.DIR_STRUCTURE[dir_name]
+                dir_path = self.project_dir / self.DIR_STRUCTURE[dir_name]
             except KeyError as e:
                 raise KeyError(f"The directory key {e} is not registered in BaseClass.")
             overwrite = dir_name in write_dirs
@@ -100,7 +119,7 @@ class BaseClass:
                 self.create_if_not_exists(dir_path, overwrite=overwrite),
             )
 
-    def load_model_path(self, project_dir, model_version, pretrained=False):
+    def load_model_path(self, model_version, pretrained=False):
         """
         Loads the path to the model file, either as pretrained model, or as a model to be evaluated.
 
@@ -117,7 +136,7 @@ class BaseClass:
         """
         if pretrained:
             model_version_dir = (
-                project_dir / self.DIR_STRUCTURE["pretrained"] / model_version
+                self.project_dir / self.DIR_STRUCTURE["pretrained"] / model_version
             )
         else:
             model_version_dir = self.models_dir / model_version

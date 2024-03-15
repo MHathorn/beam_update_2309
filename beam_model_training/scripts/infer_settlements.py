@@ -21,8 +21,7 @@ if __name__ == "__main__":
         "-c",
         "--config_name",
         type=str,
-        default="project_config.yaml",
-        help="The configuration file name. Defaults to 'project_config.yaml'.",
+        help="The configuration file name. If missing, the constructor will look for a single file in the project directory.",
     )  # optional
     parser.add_argument(
         "-p",

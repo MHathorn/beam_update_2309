@@ -32,7 +32,7 @@ class DataTiler(BaseClass):
     mask and weight tiles if required, and saving these tiles for further processing.
 
     Attributes:
-        root_dir (Path): The project directory containing all training files.
+        project_dir (Path): The project directory containing all training files.
         crs (CRS): Coordinate Reference System of the input images.
         spatial_resolution (float): Spatial resolution of the images.
         tiling_params (dict): Parameters related to tiling such as distance weighting,
@@ -56,7 +56,7 @@ class DataTiler(BaseClass):
         and `weight_tiles` (if distance weighting is enabled).
     """
 
-    def __init__(self, project_dir, config_name="project_config.yaml"):
+    def __init__(self, project_dir, config_name=None):
         """
         Initializes the DataTiler with the relevant configuration settings.
 
@@ -64,11 +64,10 @@ class DataTiler(BaseClass):
             project_dir : str
                 Path to the project directory, containing images, config file and labels (if training project).
             config_name : str
-                Name of the config file. Defaults to project_config.yaml.
+                The configuration file name. If missing, the constructor will look for a single file in the project directory.
         """
 
-        self.root_dir = super()._set_project_dir(project_dir)
-        self.config = super().load_config(self.root_dir / config_name)
+        super().__init__(project_dir, config_name)
         self.tiling_params = self._load_tiling_params(self.config)
         seed(self.config["seed"])
 
@@ -77,15 +76,15 @@ class DataTiler(BaseClass):
         write_dirs = ["image_tiles"]
 
         # Checking for images and loading in DataArrays
-        images_dir = self.root_dir / self.DIR_STRUCTURE["images"]
+        images_dir = self.project_dir / self.DIR_STRUCTURE["images"]
         if not images_dir.exists():
             raise IOError(
-                "The directory path `images` does not point to an existing directry in `root_dir`."
+                "The directory path `images` does not point to an existing directry in `project_dir`."
             )
         self.images_generator = self._load_images(images_dir)
 
         # Checking for masks and loading if exist
-        labels_dir = self.root_dir / self.DIR_STRUCTURE["labels"]
+        labels_dir = self.project_dir / self.DIR_STRUCTURE["labels"]
         valid_label_paths = [
             l
             for l in labels_dir.glob("*")
@@ -106,7 +105,7 @@ class DataTiler(BaseClass):
             # Loading labels from csv / shapefile.
             self.labels = self._load_labels(valid_label_paths)
 
-        super().__init__(self.root_dir, write_dirs=write_dirs)
+        super().load_dir_structure(write_dirs=write_dirs)
 
     def _load_tiling_params(self, config):
         """
@@ -310,7 +309,7 @@ class DataTiler(BaseClass):
 
         if write:
             tmp_dir = BaseClass.create_if_not_exists(
-                self.root_dir / "tmp", overwrite=True
+                self.project_dir / "tmp", overwrite=True
             )
             self._write_da_to_raster(mask_da, f"{image.name}_mask.tif", tmp_dir)
             if self.tiling_params["distance_weighting"]:

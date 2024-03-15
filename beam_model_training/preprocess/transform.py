@@ -41,13 +41,13 @@ def calculate_average_confidence(buildings, tile_geom):
     return buildings_in_tile["confidence"].mean()
 
 
-def gen_train_test(root_dir, test_size=0.2, seed=2022, distance_weighting=False):
+def gen_train_test(project_dir, test_size=0.2, seed=2022, distance_weighting=False):
     """
     Splits image and mask files into training and testing sets based on the specified test size and seed,
     and moves the testing files to separate directories.
 
     Args:
-        root_dir (str or Path): The directory containing all project tiles.
+        project_dir (str or Path): The directory containing all project tiles.
         test_size (float, optional): The proportion of the dataset to include in the test split. Defaults to 0.2.
         seed (int, optional): The random seed used for splitting the data. Defaults to 2022.
         distance_weighting (bool, optional): Whether to include distance weighting files in the split. Defaults to False.
@@ -61,8 +61,8 @@ def gen_train_test(root_dir, test_size=0.2, seed=2022, distance_weighting=False)
     Note:
         This function expects mask and weight files to match the name of an image file.
     """
-    root_dir = Path(root_dir)
-    images_dir = root_dir / BaseClass.DIR_STRUCTURE["image_tiles"]
+    project_dir = Path(project_dir)
+    images_dir = project_dir / BaseClass.DIR_STRUCTURE["image_tiles"]
 
     # Ensure the source directories exist and no files are missing.
     if not images_dir.exists():
@@ -82,9 +82,9 @@ def gen_train_test(root_dir, test_size=0.2, seed=2022, distance_weighting=False)
 
     for dir_name, files in [("test", test_files), ("train", train_files)]:
         for tile in tile_types:
-            source_dir = root_dir / BaseClass.DIR_STRUCTURE[f"{tile}_tiles"]
+            source_dir = project_dir / BaseClass.DIR_STRUCTURE[f"{tile}_tiles"]
             target_dir = BaseClass.create_if_not_exists(
-                root_dir / BaseClass.DIR_STRUCTURE[f"{dir_name}_{tile}s"],
+                project_dir / BaseClass.DIR_STRUCTURE[f"{dir_name}_{tile}s"],
                 overwrite=True,
             )
 

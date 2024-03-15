@@ -66,23 +66,23 @@ class TestMapGenerator:
         self, mock_config: Any, request: pytest.FixtureRequest, tmp_path_factory
     ):
         name, config = mock_config["config_name"], mock_config["config_value"]
-        root_dir = Path("beam_model_training/tests") / name.split("_")[0]
+        project_dir = Path("beam_model_training/tests") / name.split("_")[0]
         tmp_path = tmp_path_factory.mktemp("trainer_test")
         test_dir = tmp_path / name
         config_name = f"{name}_config.yaml"
 
         # Generate tiles once in the main directory
-        tiles_path = root_dir / Trainer.DIR_STRUCTURE["image_tiles"]
+        tiles_path = project_dir / Trainer.DIR_STRUCTURE["image_tiles"]
         if not tiles_path.exists():
-            data_tiler = DataTiler(root_dir, "test_config.yaml")
+            data_tiler = DataTiler(project_dir, "test_config.yaml")
             data_tiler.generate_tiles(config["tiling"]["tile_size"])
-            gen_train_test(root_dir, test_size=config["test_size"])
+            gen_train_test(project_dir, test_size=config["test_size"])
 
         try:
-            # Copy the entire file structure from root_dir to the temporary directory.
-            if root_dir.exists():
-                for item in root_dir.iterdir():
-                    s = root_dir / item.name
+            # Copy the entire file structure from project_dir to the temporary directory.
+            if project_dir.exists():
+                for item in project_dir.iterdir():
+                    s = project_dir / item.name
                     d = test_dir / item.name
                     if s.is_dir():
                         shutil.copytree(s, d)
@@ -94,9 +94,9 @@ class TestMapGenerator:
                 yaml.dump(config, file)
 
             # Creating learner and map_generator
-            trainer = Trainer(test_dir, config_name)
+            trainer = Trainer(test_dir)
             trainer.set_learner()
-            map_generator = MapGenerator(test_dir, config_name, generate_preds=True)
+            map_generator = MapGenerator(test_dir, generate_preds=True)
             map_generator.model = trainer.learner
             yield map_generator
 
