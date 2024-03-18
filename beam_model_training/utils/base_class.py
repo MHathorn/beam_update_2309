@@ -35,7 +35,7 @@ class BaseClass:
         "test_weights": "tiles/test/weights",
     }
 
-    def __init__(self, project_dir, config_name, read_dirs=[], write_dirs=[]):
+    def __init__(self, project_dir, config_name=None):
         """
         Initializes the BaseClass with the given configuration.
 

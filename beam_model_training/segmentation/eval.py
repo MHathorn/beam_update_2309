@@ -82,6 +82,10 @@ class Evaluator(BaseClass):
         else:
             read_dirs += ["shapefiles", "predictions"]
         super().load_dir_structure(read_dirs=read_dirs, write_dirs=write_dirs)
+        if len(list(self.predictions_dir.iterdir())) == 0 and not self.generate_preds:
+            raise FileNotFoundError(
+                "Predictions directory is empty. Set `generate_preds` to true to generate predictions."
+            )
         if model_path:
             self.model_version = Path(model_path).stem
         else:
@@ -141,7 +145,9 @@ class Evaluator(BaseClass):
                         plt.title(image_file)
                         plt.show()
                     else:
-                        output_path = self.eval_dir / f"eval_pred_{image_file}"
+                        output_path = self.eval_dir / f"eval_pred_{image_file}".replace(
+                            ".TIF", ".png"
+                        )
                         img.save(output_path)
                         logging.info(
                             f"Image file {output_path.name} written to `{output_path.parent.name}`."

@@ -79,11 +79,9 @@ class MapGenerator(BaseClass):
         prediction_dirs = ["predictions", "shapefiles"]
         self.generate_preds = generate_preds
         if self.generate_preds:
-            super().__init__(
-                self.project_dir, read_dirs=read_dirs, write_dirs=prediction_dirs
-            )
+            super().load_dir_structure(read_dirs=read_dirs, write_dirs=prediction_dirs)
         else:
-            super().__init__(self.project_dir, read_dirs=(read_dirs + prediction_dirs))
+            super().load_dir_structure(read_dirs=(read_dirs + prediction_dirs))
         if self.config.get("model_version"):
             model_path = super().load_model_path(self.config["model_version"])
             self.model = load_learner(model_path)
@@ -367,7 +365,7 @@ class MapGenerator(BaseClass):
         return output_da
 
     def create_tile_inferences(
-        self, image_files=None, boundaries_gdf=None, write_shp=False, parallel=True
+        self, image_files=None, boundaries_gdf=None, write_shp=True, parallel=True
     ):
         """
         Performs inference on a collection of image files and optionally writes the results to shapefiles.
