@@ -8,7 +8,7 @@ dependencies:
   - numpy=1.23.5 # numpy <1.24 required for semtorch
   - pytorch=1.13.1
   - pytorch-cuda=11.7
-  - fastai
+  - fastai=2.7.14
   - tensorboard
   - colorlog
   - geopandas
