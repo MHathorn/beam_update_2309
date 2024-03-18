@@ -75,6 +75,7 @@ def get_rgb_channels(input_data):
             )
 
         riox_img = rxr.open_rasterio(tiff_file_path)
+        riox_img.name = tiff_file_path.stem
     elif isinstance(input_data, xr.DataArray):
         riox_img = input_data
     else:

@@ -98,7 +98,6 @@ class TestTrainer:
 
     def test_map_unique_classes(self, trainer: Trainer):
 
-        # Mocking the get_image_files and rxr.open_rasterio functions
         # You might need to adjust this part based on your actual implementation
 
         result = trainer._map_unique_classes()

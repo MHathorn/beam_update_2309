@@ -71,6 +71,7 @@ class Evaluator(BaseClass):
             The path to the model, if not set by the config file.
         """
 
+        # initialize config object and seed
         super().__init__(project_dir, config_name)
         seed(self.config["seed"])
 
@@ -82,10 +83,9 @@ class Evaluator(BaseClass):
         else:
             read_dirs += ["shapefiles", "predictions"]
         super().load_dir_structure(read_dirs=read_dirs, write_dirs=write_dirs)
-        if len(list(self.predictions_dir.iterdir())) == 0 and not self.generate_preds:
-            raise FileNotFoundError(
-                "Predictions directory is empty. Set `generate_preds` to true to generate predictions."
-            )
+        assert (
+            len(list(self.predictions_dir.iterdir())) > 0 or self.generate_preds
+        ), "Predictions directory is empty. Set `generate_preds` to true to generate new predictions."
         if model_path:
             self.model_version = Path(model_path).stem
         else:
