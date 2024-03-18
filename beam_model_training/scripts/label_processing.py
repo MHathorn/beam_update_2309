@@ -43,7 +43,7 @@ def process_all_exports(json_dir, img_dir, shp_dir):
     """
     file_gdfs = []
     crs = "EPSG:32616"
-    json_files = [f for f in json_dir.iterdir() if f.endswith(".json")]
+    json_files = [f for f in json_dir.iterdir() if f.suffix == ".json"]
     with tqdm(json_files, desc="Processing JSON files", unit="file") as pbar_json:
         for file in pbar_json:
             pbar_json.set_postfix(file=file.name)
@@ -81,7 +81,7 @@ def process_all_exports(json_dir, img_dir, shp_dir):
 
     if file_gdfs:
         gdf = pd.concat(file_gdfs, ignore_index=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
         shapefile_name = f"labeled_buildings_{timestamp}.shp"
         try:
             gdf.drop(columns=["image_bounds"]).to_file(shp_dir / shapefile_name)
