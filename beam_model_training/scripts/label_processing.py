@@ -1,14 +1,18 @@
 """
-This script processes JSON files exported from LabelStudio and converts the labeling information into shapefiles. 
-It is designed to work with raster tiles in TIFF formats, that have been used a input for labeling in LabelStudio.
+This script processes JSON files exported from LabelStudio and creates an initial project structure for fine-tuning.
+It converts the labeling information into geo-located shapefiles in a `labels` sub-directory, 
+and copies all corresponding tiles into an `images` sub-directory. 
+It is designed to work with the raster tiles, in TIFF format, that have been used a input for labeling in LabelStudio.
 
 Usage:
-Run the script from the command line, providing paths to directories containing JSON files, TIFF images, and where the shapefiles will be saved.
+Run the script from the command line, providing paths to directories containing JSON files, TIFF images, and where the new project structure will be saved.
 
 Example command:
-python script.py --json_dir /path/to/jsons --img_dir /path/to/tiff/images --shp_dir /path/to/save/shapefiles
+python script.py --json_dir /path/to/jsons --img_dir /path/to/tiff/images --output_dir /path/to/save/outputs
 
-The script assumes that the input JSON files are exports from LabelStudio tasks, each containing labels for an image. The labeled points are converted to polygons using the coordinate reference system of the input TIFF images, which are then reprojected to the specified CRS before being saved as shapefiles.
+The script assumes that the input JSON files are exports from LabelStudio tasks, each containing labels for an image. The labeled points are converted to polygons 
+using the coordinate reference system of the input TIFF images, 
+which are then reprojected to the specified CRS before being saved as shapefiles.
 
 Note:
 - The script expects the TIFF images to be named consistently with the 'file_upload' field in the LabelStudio JSON export, after removal of the prefix used by LabelStudio.
@@ -18,7 +22,9 @@ import argparse
 from datetime import datetime
 import json
 import logging
+import os
 from pathlib import Path
+import shutil
 
 import geopandas as gpd
 import numpy as np
@@ -32,14 +38,36 @@ logging.basicConfig(
 )
 
 
-def process_all_exports(json_dir, img_dir, shp_dir):
+def copy_image_files(labels_gdf, img_dir, output_dir):
+    """
+    Copy image files to an `images` sub-directory in the output directory.
+
+    Parameters:
+    - labels_gdf: The final labels shapefile extracted from the JSON exports.
+    - output_dir: The fine-tuning directory where `images` and ``labels` will be created.
+    - img_dir: The directory containing all TIFF files.
+    """
+    labeled_image_names = labels_gdf.image_name.unique()
+    logging.info("Creating images directory..")
+    output_img_dir = output_dir / "images"
+    os.makedirs(output_img_dir, exist_ok=True)
+    for img_name in tqdm(labeled_image_names):
+        source_img = img_dir / img_name
+        dest_img = output_img_dir / img_name
+        if source_img.exists():
+            shutil.copy2(source_img, dest_img)
+        else:
+            logging.error(f"The source image {source_img.name} could not be found.")
+
+
+def process_all_exports(json_dir, img_dir, output_dir):
     """
     Process JSON files exported from LabelStudio and save them as shapefiles.
 
     Parameters:
     - json_dir (Path): Directory containing JSON files.
     - img_dir (Path): Directory where TIFF images used for labeling will be found.
-    - shp_dir (Path): Directory where shapefiles will be saved.
+    - output_dir (Path): The directory where labels and images will be saved for training on labels.
     """
     file_gdfs = []
     crs = "EPSG:32616"
@@ -84,11 +112,15 @@ def process_all_exports(json_dir, img_dir, shp_dir):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M")
         shapefile_name = f"labeled_buildings_{timestamp}.shp"
         try:
-            gdf.drop(columns=["image_bounds"]).to_file(shp_dir / shapefile_name)
+            labels_dir = output_dir / "labels"
+            os.makedirs(labels_dir, exist_ok=True)
+            gdf.drop(columns=["image_bounds"]).to_file(labels_dir / shapefile_name)
         except Exception as e:
             logging.error(f"Failed to save shapefile: {e}")
+        return gdf
     else:
         logging.error(f"No labels to save in {json_dir}.")
+        return
 
 
 def convert_task_to_gdf(task, crs, img_dir):
@@ -189,10 +221,10 @@ if __name__ == "__main__":
         help="Directory where TIFF images used for labeling will be found",
     )
     parser.add_argument(
-        "--shp_dir",
+        "--output_dir",
         type=str,
         required=True,
-        help="Directory where shapefiles will be saved",
+        help="The directory where labels and images will be saved for training on labels.",
     )
 
     # Parse the command line arguments
@@ -201,6 +233,10 @@ if __name__ == "__main__":
     # Assign directories from command line arguments
     json_dir = Path(args.json_dir)
     img_dir = Path(args.img_dir)
-    shp_dir = Path(args.shp_dir)
+    output_dir = Path(args.output_dir)
 
-    process_all_exports(json_dir, img_dir, shp_dir)
+    # Process and save labels stored in the JSON directory exports
+    all_labels = process_all_exports(json_dir, img_dir, output_dir)
+    # Copy corresponding image tiles to a new sub-directory
+    if all_labels is not None:
+        copy_image_files(all_labels, img_dir, output_dir)
