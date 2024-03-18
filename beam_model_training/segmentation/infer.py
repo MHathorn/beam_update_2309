@@ -312,7 +312,6 @@ class MapGenerator(BaseClass):
 
         if boundaries_gdf is not None and not tile_in_settlement(tile, boundaries_gdf):
             return
-        else:
         # Run inference and save as grayscale image
         image = Image.fromarray(tile.data.transpose(1, 2, 0))
         pred, _, _ = self.learner.predict(image)
