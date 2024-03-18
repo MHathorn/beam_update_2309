@@ -317,14 +317,14 @@ class MapGenerator(BaseClass):
         pred, _, _ = self.learner.predict(image)
         output = torch.exp(pred[:, :]).detach().cpu().numpy()
 
-            output_min = output.min()
-            output_max = output.max()
+        output_min = output.min()
+        output_max = output.max()
 
-            output = (
-                np.zeros_like(output)
-                if output_min == output_max
-                else (output - output_min) / (output_max - output_min)
-            )
+        output = (
+            np.zeros_like(output)
+            if output_min == output_max
+            else (output - output_min) / (output_max - output_min)
+        )
 
         inference_path = self.predictions_dir / f"{image_file.stem}_INFERENCE.TIF"
 
