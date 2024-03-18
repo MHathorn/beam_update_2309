@@ -6,7 +6,7 @@ from segmentation.infer import MapGenerator
 import xarray
 import yaml
 
-from fastai.vision.all import PILMask
+from fastai.vision.all import PILMask, get_files
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -97,7 +97,7 @@ class TestMapGenerator:
             trainer = Trainer(test_dir)
             trainer.set_learner()
             map_generator = MapGenerator(test_dir, generate_preds=True)
-            map_generator.model = trainer.learner
+            map_generator.learner = trainer.learner
             yield map_generator
 
         finally:
@@ -110,7 +110,9 @@ class TestMapGenerator:
         # Mocking the get_image_files and rxr.open_rasterio functions
         # You might need to adjust this part based on your actual implementation
 
-        image_files = map_generator._get_image_files(map_generator.test_images_dir)
+        image_files = get_files(
+            map_generator.test_images_dir, extensions=[".tif", ".tiff"]
+        )
 
         prediction = map_generator.single_tile_inference(
             image_files[0], write_shp=False
@@ -126,8 +128,12 @@ class TestMapGenerator:
 
     def test_parallel_inferences(self, map_generator: MapGenerator):
         map_generator.create_tile_inferences(write_shp=True, parallel=False)
-        image_files = map_generator._get_image_files(map_generator.test_images_dir)
-        inference_files = map_generator._get_image_files(map_generator.predictions_dir)
+        image_files = get_files(
+            map_generator.test_images_dir, extensions=[".tif", ".tiff"]
+        )
+        inference_files = get_files(
+            map_generator.predictions_dir, extensions=[".tif", ".tiff"]
+        )
         assert len(inference_files) == len(
             image_files
         ), "The number of predictions doesn't match the number of test images."

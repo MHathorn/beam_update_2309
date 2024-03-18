@@ -12,7 +12,7 @@ import rasterio
 import rioxarray as rxr
 import torch
 import xarray as xr
-from fastai.vision.all import load_learner
+from fastai.vision.all import *
 from PIL import Image
 from rioxarray.merge import merge_arrays
 from shapely.geometry import Polygon, box
@@ -59,7 +59,9 @@ class MapGenerator(BaseClass):
         Orchestrates the inference process across all tiles in the specified directory, optionally merging results based on settlement boundaries.
     """
 
-    def __init__(self, project_dir, config_name=None, generate_preds=False):
+    def __init__(
+        self, project_dir, config_name=None, model_path=None, generate_preds=False
+    ):
         """
         Constructs all the necessary attributes for the MapGenerator object.
 
@@ -82,9 +84,16 @@ class MapGenerator(BaseClass):
             super().load_dir_structure(read_dirs=read_dirs, write_dirs=prediction_dirs)
         else:
             super().load_dir_structure(read_dirs=(read_dirs + prediction_dirs))
-        if self.config.get("model_version"):
-            model_path = super().load_model_path(self.config["model_version"])
-            self.model = load_learner(model_path)
+        if model_path:
+            self.model_version = Path(model_path).stem
+            self.learner = load_learner(model_path)
+        elif self.config.get("model_version"):
+            try:
+                self.model_version = self.config["model_version"]
+                model_path = super().load_model_path(self.model_version)
+                self.learner = load_learner(model_path)
+            except KeyError as e:
+                raise KeyError(f"Config must have a value for {e}.")
         self.crs = self.get_crs(self.test_images_dir)
         self.erosion = self.config["tiling"]["erosion"]
 
@@ -98,29 +107,6 @@ class MapGenerator(BaseClass):
             return img.rio.crs
         else:
             logging.warning("CRS could not be set at initialization.")
-
-    def _get_image_files(self, images_dir):
-        """
-        Retrieve a list of image files from the specified directory.
-
-        This method searches for files with .TIF or .TIFF extensions within the given directory.
-        If no such files are found, it raises a FileNotFoundError.
-
-        Args:
-            images_dir (Path): A Path object representing the directory to search for image files.
-
-        Returns:
-            list: A list of Path objects representing the image files found in the directory.
-        """
-        image_files = list(images_dir.glob("*.TIF")) + list(images_dir.glob("*.TIFF"))
-        if not image_files:
-            raise FileNotFoundError(
-                f"No valid image files found in directory {images_dir}. Make sure the directory has files and that the format is correct."
-            )
-        logging.info(
-            f"Found {len(image_files)} image files in directory {images_dir}. "
-        )
-        return image_files
 
     def create_shp_from_mask(self, mask_da):
         """
@@ -321,16 +307,16 @@ class MapGenerator(BaseClass):
             tile = tile.rio.reproject(self.crs)
 
         assert (
-            self.model
+            self.learner
         ), "The model version must be specified in the configuration settings."
 
         if boundaries_gdf is not None and not tile_in_settlement(tile, boundaries_gdf):
             return
         else:
-            # Run inference and save as grayscale image
-            image = Image.fromarray(tile.data.transpose(1, 2, 0))
-            pred, _, _ = self.model.predict(image)
-            output = torch.exp(pred[:, :]).detach().cpu().numpy()
+        # Run inference and save as grayscale image
+        image = Image.fromarray(tile.data.transpose(1, 2, 0))
+        pred, _, _ = self.learner.predict(image)
+        output = torch.exp(pred[:, :]).detach().cpu().numpy()
 
             output_min = output.min()
             output_max = output.max()
@@ -387,9 +373,15 @@ class MapGenerator(BaseClass):
             A list of DataArrays containing the inference results for each processed image file. Each DataArray in the list corresponds to the predictions for a single image file.
         """
 
-        image_files = image_files or self._get_image_files(self.test_images_dir)
+        image_files = image_files or get_files(
+            self.test_images_dir, extensions=[".tif", ".tiff"]
+        )
         assert (
-            self.model
+            image_files
+        ), "No valid image files found. Make sure the directory has files and that the format is correct."
+
+        assert (
+            self.learner
         ), "The model version must be specified in the configuration settings."
 
         output_files = []
@@ -469,7 +461,13 @@ class MapGenerator(BaseClass):
 
         else:
 
-            image_files = self._get_image_files(images_dir)
+            image_files = get_files(images_dir, extensions=[".tif", ".tiff"])
+            assert (
+                image_files
+            ), f"No valid image files found in directory {images_dir}. Make sure the directory has files and that the format is correct."
+            logging.info(
+                f"Found {len(image_files)} image files in directory {images_dir}. "
+            )
             write_shp = boundaries_gdf is None
 
             output_files = self.create_tile_inferences(
@@ -494,7 +492,7 @@ class MapGenerator(BaseClass):
                 "Output merged, joined with boundaries geoDataframe, and saved to disk."
             )
 
-        logging.info("Tile inference process completed.")
+        logging.info("Map generation process completed.")
 
 
 if __name__ == "__main__":

@@ -80,22 +80,15 @@ class Evaluator(BaseClass):
         write_dirs = []
         if self.generate_preds:
             write_dirs += ["shapefiles", "predictions"]
+            self.map_generator = MapGenerator(
+                project_dir, config_name, model_path, generate_preds
+            )
         else:
             read_dirs += ["shapefiles", "predictions"]
         super().load_dir_structure(read_dirs=read_dirs, write_dirs=write_dirs)
         assert (
             len(list(self.predictions_dir.iterdir())) > 0 or self.generate_preds
         ), "Predictions directory is empty. Set `generate_preds` to true to generate new predictions."
-        if model_path:
-            self.model_version = Path(model_path).stem
-        else:
-            try:
-                self.model_version = self.config["model_version"]
-                model_path = super().load_model_path(self.model_version)
-            except KeyError as e:
-                raise KeyError(f"Config must have a value for {e}.")
-
-        self.model = load_learner(model_path)
 
     def overlay_shapefiles_on_images(self, n_images, show=False):
         """
@@ -156,14 +149,12 @@ class Evaluator(BaseClass):
             else:
                 logging.warning(f"Image file {image_file} not found.")
 
-    def compute_metrics(self, map_gen, iou_threshold=0.5):
+    def compute_metrics(self, iou_threshold=0.5):
         """
         Computes precision, recall, accuracy, dice coefficient, and IoU for the model's predictions.
 
         Parameters
         ----------
-        map_gen : MapGenerator
-            An instance of MapGenerator to convert masks to shapefiles.
         iou_threshold : float, optional
             The IoU threshold to consider when calculating building-level precision and recall (default: 0.5).
 
@@ -205,7 +196,7 @@ class Evaluator(BaseClass):
                 gt_mask = rxr.open_rasterio(
                     groundtruth_path, default_name=groundtruth_path.name
                 )
-                gt_gdf = map_gen.create_shp_from_mask(gt_mask)
+                gt_gdf = self.map_generator.create_shp_from_mask(gt_mask)
                 gt_values = (
                     (gt_mask / 255).astype(int).values
                 )  # Convert to binary (0 and 1)
@@ -214,7 +205,7 @@ class Evaluator(BaseClass):
                 pred_mask = rxr.open_rasterio(
                     pred_mask_path, default_name=pred_mask_path.name
                 )
-                pred_gdf = map_gen.create_shp_from_mask(pred_mask)
+                pred_gdf = self.map_generator.create_shp_from_mask(pred_mask)
                 pred_values = (pred_mask > 0.5).astype(int).values
 
                 # Accumulate values for metrics
@@ -250,7 +241,7 @@ class Evaluator(BaseClass):
             # Create a DataFrame with the aggregated metrics
             metrics = {
                 "EvalTimestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "ModelVersion": self.model_version,
+                "ModelVersion": self.map_generator.model_version,
                 "Precision": [round(precision, 3)],
                 "Recall": [round(recall, 3)],
                 "Accuracy": [round(accuracy, 3)],
@@ -276,14 +267,13 @@ class Evaluator(BaseClass):
         iou_threshold : float, optional
             The IoU threshold to consider when calculating building-level precision and recall (default: 0.5).
         """
-        map_gen = MapGenerator(
-            self.project_dir, self.config_name, generate_preds=self.generate_preds
-        )
         if self.generate_preds:
-            map_gen.create_tile_inferences()
+            self.map_generator.create_tile_inferences(write_shp=True)
         self.overlay_shapefiles_on_images(n_images)
-        metrics = self.compute_metrics(map_gen, iou_threshold)
-        output_file_path = self.eval_dir / (self.model_version + "_metrics.csv")
+        metrics = self.compute_metrics(iou_threshold=iou_threshold)
+        output_file_path = self.eval_dir / (
+            self.map_generator.model_version + "_metrics.csv"
+        )
         if output_file_path.exists():
             try:
                 df = pd.read_csv(output_file_path)
