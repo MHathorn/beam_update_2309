@@ -1,6 +1,6 @@
 import argparse
 import logging
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import cv2
@@ -343,10 +343,11 @@ class MapGenerator(BaseClass):
         if write_shp:
             shp_path = self.shapefiles_dir / f"{image_file.stem}_predicted.shp"
             vector_df = self.create_shp_from_mask(output_da)
-            vector_df.to_file(
-                shp_path,
-                driver="ESRI Shapefile",
-            )
+            if not vector_df.empty:
+                vector_df.to_file(
+                    shp_path,
+                    driver="ESRI Shapefile",
+                )
         return output_da
 
     def create_tile_inferences(
@@ -385,7 +386,8 @@ class MapGenerator(BaseClass):
 
         output_files = []
         if parallel:
-            with ProcessPoolExecutor() as executor:
+            with ThreadPoolExecutor() as executor:
+                self.learner.model.cpu()
                 futures = [
                     executor.submit(
                         self.single_tile_inference,
