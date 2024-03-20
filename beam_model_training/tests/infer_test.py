@@ -38,16 +38,7 @@ base_config = {
 
 mock_configs = {
     "satellite_unet": base_config,
-    # "aerial_unet": create_config("aerial_unet", base_config),
-    # "satellite_hrnet_w18": create_config(
-    #     "satellite_hrnet_w18", base_config, architecture="HRNet", backbone="hrnet_w18"
-    # ),
-    # "aerial_hrnet_w18": create_config(
-    #     "aerial_hrnet_w18",
-    #     base_config,
-    #     architecture="HRNet",
-    #     backbone="hrnet_w18",
-    # ),
+    "aerial_unet": create_config("aerial_unet", base_config),
 }
 
 
@@ -61,6 +52,11 @@ class TestMapGenerator:
     )
     def mock_config(self, request: pytest.FixtureRequest):
         return request.param
+
+    @pytest.fixture
+    def boundaries_path(self, mock_config):
+        name = mock_config["config_name"]
+        return f"AOIs/{name.split('_')[0]}_test_polygons.shp"
 
     @pytest.fixture
     def map_generator(self, mock_config, tmp_path_factory):
@@ -116,7 +112,7 @@ class TestMapGenerator:
             mask_da.shape[-2],
             mask_da.shape[-1],
         )
-        center_square_size = 5
+        center_square_size = 20
         mask_array = np.zeros((size_y, size_x), dtype=np.uint8)
         start_y = size_y // 2 - center_square_size // 2
         start_x = size_x // 2 - center_square_size // 2
@@ -162,24 +158,40 @@ class TestMapGenerator:
             image_files
         ), "The number of predictions doesn't match the number of test images."
 
-    def test_generate_map_with_no_overlap(self, map_generator):
+    def test_generate_map_with_no_overlap(self, boundaries_path, map_generator):
 
         # Call the function under test
-        polygons_path = map_generator.project_dir / "AOIs/test_polygons.shp"
+        polygons_path = map_generator.project_dir / boundaries_path
         boundaries_gdf = gpd.read_file(polygons_path)
+
+        # Directory where the image tiles are located
+        image_tiles_dir = (
+            map_generator.project_dir / map_generator.DIR_STRUCTURE["image_tiles"]
+        )
+
+        # New sub-directory for filtered images
+        filtered_images_dir = map_generator.project_dir / "filtered_images"
+        filtered_images_dir.mkdir(exist_ok=True)
+
+        # Filter and copy images with "IMAGE_1024A" in their name to the new sub-directory
+        for img in image_tiles_dir.iterdir():
+            if "IMAGE_1024A" in img.name:
+                shutil.copy(str(img), str(filtered_images_dir))
 
         with pytest.raises(FileNotFoundError) as errinfo:
             map_generator.generate_map_from_images(
-                boundaries_gdf=boundaries_gdf, primary_key="id"
+                images_dir=filtered_images_dir,
+                boundaries_gdf=boundaries_gdf,
+                primary_key="id",
             )
-        assert str(map_generator.test_images_dir) in str(
+        assert str(filtered_images_dir) in str(
             errinfo.value
-        ), "No overlap error should mention the tiles directory."
+        ), "This should raise an error and mention the tiles directory."
 
-    def test_generate_map_with_overlap(self, map_generator):
+    def test_generate_map_with_overlap(self, boundaries_path, map_generator):
 
         # Call the function under test
-        polygons_path = map_generator.project_dir / "AOIs/test_polygons.shp"
+        polygons_path = map_generator.project_dir / boundaries_path
         images_dir = (
             map_generator.project_dir / map_generator.DIR_STRUCTURE["image_tiles"]
         )
@@ -190,10 +202,10 @@ class TestMapGenerator:
         shapefiles = get_files(map_generator.shapefiles_dir, extensions=[".shp"])
         assert len(shapefiles) == 1, "Map generation should create a single shapefile"
 
-    def test_generate_map_wrong_primary_key(self, map_generator):
+    def test_generate_map_wrong_primary_key(self, boundaries_path, map_generator):
 
         # Call the function under test
-        polygons_path = map_generator.project_dir / "AOIs/test_polygons.shp"
+        polygons_path = map_generator.project_dir / boundaries_path
         boundaries_gdf = gpd.read_file(polygons_path)
         wrong_key = "settlement_id"
         images_dir = (
