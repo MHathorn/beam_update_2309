@@ -34,10 +34,10 @@ class Evaluator(BaseClass):
         Path to the project directory, containing one or more models, as well as images and masks for evaluation.
     config_name : str (optional)
         The configuration file name. If missing, the constructor will look for a single file in the project directory.
+    model_path:
+        The path to the model, if not set by the config file. Optional if generate_preds=False.
     generate_preds : bool
         Flag indicating whether predictions should be generated during evaluation.
-    model_path:
-        The path to the model, if not set by the config file.
 
     Methods
     -------
@@ -53,8 +53,8 @@ class Evaluator(BaseClass):
         self,
         project_dir,
         config_name=None,
-        generate_preds=False,
         model_path=None,
+        generate_preds=False,
     ):
         """
         Constructs all the necessary attributes for the Evaluator object.
@@ -299,6 +299,12 @@ if __name__ == "__main__":
         help="The configuration file name. If missing, the constructor will look for a single file in the project directory.",
     )  # optional
     parser.add_argument(
+        "-m",
+        "--model_path",
+        type=str,
+        help="The path to the model, if not set by the config file. Optional if generate_preds=False.",
+    )  # optional
+    parser.add_argument(
         "--generate_preds",
         default=False,
         action="store_true",
@@ -322,6 +328,7 @@ if __name__ == "__main__":
     evaluator = Evaluator(
         project_dir=args.project_dir,
         config_name=args.config_name,
+        model_path=args.model_path,
         generate_preds=args.generate_preds,
     )
     evaluator.evaluate(n_images=args.n_images, iou_threshold=args.iou_threshold)

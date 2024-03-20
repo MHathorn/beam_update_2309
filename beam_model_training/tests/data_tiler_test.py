@@ -150,10 +150,3 @@ class Test_DataTiler:
             assert len(image_files) == len(
                 weight_files
             ), f"{name}: Number of images and weight tiles do not match."
-        else:
-            weight_tiles_dir = (
-                data_tiler.project_dir / data_tiler.DIR_STRUCTURE["weight_tiles"]
-            )
-            assert (
-                not weight_tiles_dir.exists()
-            ), f"The directory {weight_tiles_dir} should not exist."

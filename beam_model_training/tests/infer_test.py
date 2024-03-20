@@ -8,7 +8,7 @@ import xarray as xr
 import rioxarray as rxr
 import yaml
 
-from fastai.vision.all import PILMask, get_files
+from fastai.vision.all import get_files
 import geopandas as gpd
 from pathlib import Path
 
