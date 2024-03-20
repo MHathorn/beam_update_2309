@@ -138,16 +138,18 @@ class MapGenerator(BaseClass):
             if len(mask_da.values.shape) > 2:
                 mask_da = mask_da.squeeze(dim=None)
             mask_da.values = cv2.dilate(mask_da.values, kernel, iterations=1)
+
+        # Extract all connected component and turn to polygons
         shapes = rasterio.features.shapes(
             mask_da.values, transform=mask_da.rio.transform()
         )
         polygons = [Polygon(shape[0]["coordinates"][0]) for shape in shapes]
-
         gdf = gpd.GeoDataFrame(crs=self.crs, geometry=polygons)
+
+        # Drop shapes that are too small or too large to be an informal settlement building
         gdf["bldg_area"] = gdf["geometry"].area
         max_area_idx = gdf["bldg_area"].idxmax()
         gdf = gdf.drop([max_area_idx])
-        # Drop shapes that are too small or too large to be an informal settlement building
         gdf = gdf[(gdf["bldg_area"] > 2) & (gdf["bldg_area"] < 30000)]
         # in case the geo-dataframe is empty which means no settlement buildings are detected
         if gdf.empty:
@@ -310,7 +312,9 @@ class MapGenerator(BaseClass):
             self.learner
         ), "The model version must be specified in the configuration settings."
 
-        if boundaries_gdf is not None and not tile_in_settlement(tile, boundaries_gdf):
+        spatial_check = boundaries_gdf is not None and not boundaries_gdf.empty
+
+        if spatial_check and not tile_in_settlement(tile, boundaries_gdf):
             return
         # Run inference and save as grayscale image
         image = Image.fromarray(tile.data.transpose(1, 2, 0))
@@ -437,7 +441,7 @@ class MapGenerator(BaseClass):
         This function saves the inference results to disk. If boundaries_gdf is provided, the results are filtered within those boundaries before being saved.
         """
 
-        images_dir = Path(images_dir) or self.test_images_dir
+        images_dir = Path(images_dir or self.test_images_dir)
         self.crs = self.crs or self.get_crs(images_dir)
         if self.crs is None:
             raise rxr.exceptions.MissingCRS(
@@ -477,7 +481,7 @@ class MapGenerator(BaseClass):
 
         if len(output_files) == 0:
             raise FileNotFoundError(
-                "Couldn't find any tiles overlapping the target area. Update the set of tiles or the boundaries shapefile accordingly."
+                f"Couldn't find any tiles overlapping the target area. Update the set of tiles or the boundaries shapefile accordingly. Images directory: {images_dir}."
             )
             return
         if boundaries_gdf is not None:

@@ -32,7 +32,9 @@ mock_configs = {
 }
 
 mock_configs["satellite_weighting"] = create_config(
-    "satellite_weighting", base_config, distance_weighting=True
+    "satellite_weighting",
+    base_config,
+    tiling={"tile_size": 256, "erosion": True, "distance_weighting": True},
 )
 
 
@@ -43,6 +45,10 @@ class Test_DataTiler:
     )
     def mock_config(self, request):
         return request.param
+
+    @pytest.fixture
+    def name(self, mock_config):
+        return mock_config["config_name"]
 
     @pytest.fixture
     def data_tiler(self, mock_config, tmp_path_factory):
@@ -146,7 +152,7 @@ class Test_DataTiler:
             ), f"{name}: Number of images and weight tiles do not match."
         else:
             weight_tiles_dir = (
-                data_tiler.project_dir + data_tiler.DIR_STRUCTURE["weight_tiles"]
+                data_tiler.project_dir / data_tiler.DIR_STRUCTURE["weight_tiles"]
             )
             assert (
                 not weight_tiles_dir.exists()
