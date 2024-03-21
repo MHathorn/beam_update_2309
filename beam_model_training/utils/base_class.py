@@ -19,7 +19,7 @@ class BaseClass:
     DIR_STRUCTURE = {
         "images": "images",
         "labels": "labels",
-        "pretrained_model": "pretrained_model",
+        "base_model": "base_model",
         "image_tiles": "tiles/images",
         "mask_tiles": "tiles/masks",
         "weight_tiles": "tiles/weights",
@@ -132,7 +132,7 @@ class BaseClass:
             FileNotFoundError: If the model directory or pickle file does not exist or can't be resolved.
         """
         # Determine the base directory based on the finetune flag
-        base_dir = self.pretrained_model_dir if finetune else self.models_dir
+        base_dir = self.base_model_dir if finetune else self.models_dir
 
         # Attempt to resolve the model_version_dir directly
         if model_version is not None:
@@ -160,7 +160,7 @@ class BaseClass:
         # Check if there is exactly one pickle file
         if len(pickle_files) != 1:
             raise FileNotFoundError(
-                f"Expected exactly one pickle file in {model_version_dir}, but found {len(pickle_files)}."
+                f"Expected one pickle file in {model_version_dir}, but found {len(pickle_files)}."
             )
 
         return pickle_files[0]

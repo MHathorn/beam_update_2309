@@ -49,7 +49,7 @@ class Trainer(BaseClass):
         # Load dirs and create if needed
         training_dirs = ["models", "train_images", "train_masks"]
         if self.train_params["finetune"]:
-            training_dirs.append("pretrained_model")
+            training_dirs.append("base_model")
         super().load_dir_structure(read_dirs=training_dirs)
 
         # Load learning arguments
@@ -60,6 +60,7 @@ class Trainer(BaseClass):
             model_path = super().load_model_path(
                 self.params["model_version"], finetune=True
             )
+            self.params["model_version"] = model_path.parent.name
             self.learner = load_learner(model_path)
 
     def _load_params(self):
