@@ -4,10 +4,8 @@ seed: 2022
 # DATA SETTINGS
 test_size: 0.2
 tiling:
-  tile_labels: false
-  distance_weighting: true
+  distance_weighting: false
   erosion: true
   tile_size: 512
 # MODEL SETTINGS
-model_version: U-Net_20241117-1410 # required for evaluation or retraining
 training: false

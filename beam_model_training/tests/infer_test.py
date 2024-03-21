@@ -1,9 +1,10 @@
+from unittest import mock
 import numpy as np
 import pytest
 import shutil
 import ssl
 import time
-from segmentation.infer import MapGenerator
+
 import xarray as xr
 import rioxarray as rxr
 import yaml
@@ -14,6 +15,7 @@ from pathlib import Path
 
 from preprocess.data_tiler import DataTiler
 from preprocess.transform import gen_train_test
+from segmentation.infer import MapGenerator
 from segmentation.train import Trainer
 from tests.fixture_config import create_config
 
@@ -91,9 +93,15 @@ class TestMapGenerator:
             # Creating learner and map_generator
             trainer = Trainer(test_dir, config_name)
             trainer.set_learner()
-            map_generator = MapGenerator(test_dir, config_name, generate_preds=True)
-            map_generator.learner = trainer.learner
-            yield map_generator
+
+            with mock.patch("segmentation.infer.load_learner") as mock_load_learner:
+                # Set up the mock to return a new Learner object when called
+                mock_load_learner.return_value = trainer.learner
+
+                map_generator = MapGenerator(
+                    test_dir, config_name, generate_preds=True, model_path="mocked.pkl"
+                )
+                yield map_generator
 
         finally:
             # Clean up after tests.

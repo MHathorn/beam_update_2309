@@ -1,4 +1,5 @@
 import os
+from unittest import mock
 import numpy as np
 import pytest
 import shutil
@@ -112,10 +113,16 @@ class TestEvaluator:
             with open(test_dir / config_name, "w") as file:
                 yaml.dump(config, file)
 
-            map_generator = MapGenerator(test_dir, config_name)
-            map_generator.model_version = "test_model"
-            evaluator = Evaluator(test_dir, config_name, generate_preds=True)
-            evaluator.map_generator = map_generator
+            with mock.patch(
+                "segmentation.infer.load_learner"
+            ) as mock_load_learner, mock.patch(
+                "segmentation.eval.MapGenerator"
+            ) as MockMapGenerator:
+                mock_load_learner.return_value = None
+                MockMapGenerator.return_value = MapGenerator(
+                    test_dir, config_name, generate_preds=True, model_path="mocked.pkl"
+                )
+                evaluator = Evaluator(test_dir, config_name, generate_preds=True)
 
             # Creating mock tiles with known polygon locations.
             gt_polygons = [((30, 30), (70, 70))]
@@ -141,7 +148,7 @@ class TestEvaluator:
                     shp_path = (
                         evaluator.shapefiles_dir / f"{img_path.stem}_predicted.shp"
                     )
-                    vector_df = map_generator.create_shp_from_mask(pred_mask)
+                    vector_df = evaluator.map_generator.create_shp_from_mask(pred_mask)
                     vector_df.to_file(shp_path, driver="ESRI Shapefile")
             for img_path in test_image_files[2:]:
                 os.remove(img_path)
@@ -181,8 +188,8 @@ class TestEvaluator:
         assert metrics.iloc[0].Dice == 0.25, "Dice coefficient should be 0.25."
         assert metrics.iloc[0].IoU == 0.143, "IoU coefficient should be 0.143."
         assert (
-            metrics.iloc[0]["Building Precision @ 0.13 IoU"] == 1
+            metrics.iloc[0]["Building Precision @ 0.1 IoU"] == 1
         ), "Building precision @ 0.1 IoU should be 1."
         assert (
-            metrics.iloc[0]["Building Recall @ 0.13 IoU"] == 1
+            metrics.iloc[0]["Building Recall @ 0.1 IoU"] == 1
         ), "Building recall @ 0.1 IoU should be 1."

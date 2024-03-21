@@ -19,7 +19,7 @@ class BaseClass:
     DIR_STRUCTURE = {
         "images": "images",
         "labels": "labels",
-        "pretrained": "pretrained",
+        "pretrained_model": "pretrained_model",
         "image_tiles": "tiles/images",
         "mask_tiles": "tiles/masks",
         "weight_tiles": "tiles/weights",
@@ -117,37 +117,49 @@ class BaseClass:
                 self.create_if_not_exists(dir_path, overwrite=overwrite),
             )
 
-    def load_model_path(self, model_version, pretrained=False):
+    def load_model_path(self, model_version=None, finetune=False):
         """
-        Loads the path to the model file, either as pretrained model, or as a model to be evaluated.
+        Loads the path to the model file, either as finetune model, or as a model for inference and evaluation.
 
         Parameters:
-            project_dir (PosixPath): Path to the project directory.
             model_version (str): Identifier of the model version.
-            pretrained (bool): Flag indicating whether to load a pretrained model.
+            finetune (bool): Flag indicating whether to load a finetune model.
 
         Returns:
             PosixPath: The path to the model pickle file.
 
         Raises:
-            ValueError: If the model directory does not exist or does not contain exactly one pickle file.
+            FileNotFoundError: If the model directory or pickle file does not exist or can't be resolved.
         """
-        if pretrained:
-            model_version_dir = (
-                self.project_dir / self.DIR_STRUCTURE["pretrained"] / model_version
-            )
-        else:
-            model_version_dir = self.models_dir / model_version
-        if not model_version_dir.exists():
-            raise ValueError(
-                f"Couldn't find model directory {model_version_dir} for {'pretraining' if pretrained else 'evaluation'}."
-            )
+        # Determine the base directory based on the finetune flag
+        base_dir = self.pretrained_model_dir if finetune else self.models_dir
+
+        # Attempt to resolve the model_version_dir directly
+        if model_version is not None:
+            model_version_dir = base_dir / model_version
+        if model_version is None or not model_version_dir.exists():
+            # If it doesn't exist, check for a single directory in the base directory
+            dirs_in_base_dir = [d for d in base_dir.iterdir() if d.is_dir()]
+            if len(dirs_in_base_dir) == 1:
+                # Use the single directory found as the model_version_dir
+                model_version_dir = dirs_in_base_dir[0]
+                logging.info(
+                    f"Couldn't find model named `{model_version}`. Using single directory found in "
+                    f"{'pre-trained ' if finetune else ' '}model directory: {model_version_dir.name}."
+                )
+            else:
+                # Raise an error if no directory or multiple directories are found
+                raise FileNotFoundError(
+                    f"Couldn't resolve model directory for {'finetuning' if finetune else 'evaluation'}.\
+                        Expected single directory or a valid `model_version` pointer. (model_version: {model_version})"
+                )
+
         # Find all pickle files in the directory
         pickle_files = list(model_version_dir.glob("*.pkl"))
 
         # Check if there is exactly one pickle file
         if len(pickle_files) != 1:
-            raise ValueError(
+            raise FileNotFoundError(
                 f"Expected exactly one pickle file in {model_version_dir}, but found {len(pickle_files)}."
             )
 

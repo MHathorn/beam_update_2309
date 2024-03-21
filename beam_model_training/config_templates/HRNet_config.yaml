@@ -4,7 +4,6 @@ seed: 2022
 # DATA SETTINGS
 test_size: 0.2
 tiling:
-  tile_labels: false
   distance_weighting: false
   erosion: true
   tile_size: 512
@@ -16,5 +15,5 @@ train:
   early_stopping: false
   epochs: 300
   loss_function: None
-  pretrained: true
+  finetune: false
 training: true

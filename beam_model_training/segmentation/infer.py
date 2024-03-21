@@ -87,10 +87,10 @@ class MapGenerator(BaseClass):
         if model_path:
             self.model_version = Path(model_path).stem
             self.learner = load_learner(model_path)
-        elif self.config.get("model_version"):
+        else:
             try:
-                self.model_version = self.config["model_version"]
-                model_path = super().load_model_path(self.model_version)
+                model_path = super().load_model_path(self.config.get("model_version"))
+                self.model_version = model_path.stem
                 self.learner = load_learner(model_path)
             except KeyError as e:
                 raise KeyError(f"Config must have a value for {e}.")

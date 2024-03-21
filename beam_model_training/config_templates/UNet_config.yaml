@@ -16,5 +16,5 @@ train:
   early_stopping: false
   epochs: 300
   loss_function: None
-  pretrained: true
+  finetune: true
 training: true

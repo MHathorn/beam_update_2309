@@ -44,20 +44,21 @@ class Trainer(BaseClass):
         # Load and initialize random seed
         self._load_params()
         seed(self.params["seed"])
+        self._load_train_params()
 
         # Load dirs and create if needed
         training_dirs = ["models", "train_images", "train_masks"]
-        # if self.params["distance_weighting"]:
-        #     training_dirs.append("train_weights")
+        if self.train_params["finetune"]:
+            training_dirs.append("pretrained_model")
         super().load_dir_structure(read_dirs=training_dirs)
 
         # Load learning arguments
-        self._load_train_params()
+
         self.p2c_map = self._map_unique_classes()
 
-        if self.train_params["pretrained"]:
+        if self.train_params["finetune"]:
             model_path = super().load_model_path(
-                self.config["model_version"], pretrained=True
+                self.params["model_version"], finetune=True
             )
             self.learner = load_learner(model_path)
 
@@ -68,11 +69,12 @@ class Trainer(BaseClass):
             ValueError: If tile size is not a positive integer.
             KeyError: If a necessary key is missing from the config dictionary.
         """
-        params_keys = ["seed", "codes", "test_size"]
-        try:
-            self.params = {k: self.config.get(k) for k in params_keys}
-        except KeyError as e:
-            raise KeyError(f"Config must have a value for {e} to run the Trainer.")
+        params_keys = ["seed", "codes", "test_size", "model_version"]
+        self.params = {k: self.config.get(k) for k in params_keys}
+
+        for k in ["seed", "codes", "test_size"]:
+            if not self.params[k]:
+                raise ValueError(f"Please provide a configuration value for `{k}`.")
 
         if self.params["test_size"] < 0 or self.params["test_size"] > 1:
             raise ValueError("Test size must be a float between 0 and 1.")
@@ -85,7 +87,7 @@ class Trainer(BaseClass):
             "epochs",
             "loss_function",
             "batch_size",
-            "pretrained",
+            "finetune",
             "early_stopping",
         ]
         self.train_params = {k: self.config["train"].get(k) for k in train_keys}
@@ -320,7 +322,7 @@ class Trainer(BaseClass):
         """
         Initializes the learner with the appropriate architecture, data transformations,
         and dataloaders. It sets up the model directory and checks the dataset balance.
-        Depending on whether a pretrained model is used or not, it either assigns the
+        Depending on whether a finetune model is used or not, it either assigns the
         dataloaders to the existing learner or creates a new learner with the specified
         parameters.
         """
@@ -331,7 +333,7 @@ class Trainer(BaseClass):
         dls = self.prepare_dataloaders(tfms)
         self.check_dataset_balance()
 
-        if self.train_params["pretrained"]:
+        if self.train_params["finetune"]:
             self.learner.dls = dls
 
         else:

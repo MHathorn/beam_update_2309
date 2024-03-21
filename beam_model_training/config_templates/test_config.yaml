@@ -4,7 +4,6 @@ seed: 2022
 # DATA SETTINGS
 test_size: 0.2
 tiling:
-  tile_labels: false
   distance_weighting: true
   erosion: true
   tile_size: 256

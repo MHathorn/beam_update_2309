@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 import rasterio
 import rioxarray as rxr
-from fastai.vision.all import load_learner
 from PIL import Image, ImageDraw
 
 from segmentation.infer import MapGenerator
