@@ -10,8 +10,8 @@ PNG directory.
 import argparse
 import logging
 from pathlib import Path
-from preprocess.data_tiler import DataTiler
 
+from preprocess.data_tiler import DataTiler
 from preprocess.sample import create_sample_dir, sample_tiles
 
 logging.basicConfig(

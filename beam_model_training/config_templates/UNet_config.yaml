@@ -9,7 +9,7 @@ tiling:
   erosion: true
   tile_size: 512
 # MODEL SETTINGS
-model_version: U-Net_20240221-1602 # required for evaluation or retraining
+model_version: U-Net_20240221-1602 # for inference or fine-tuning
 train:
   architecture: U-Net
   backbone: resnet50

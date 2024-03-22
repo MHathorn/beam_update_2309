@@ -33,7 +33,7 @@ The configuration file is divided into three main sections:
 
 ## Model Settings
 
-**model_version:** The name of the model file used for testing, e.g., "U-Net_20231218-1843.pkl".
+**model_version:** The name of the model file used for testing, e.g., "U-Net_20231218-1843.pkl". Used for disambiguation if several models in `models/` (inference case) or `base_model/` (fine-tuning case).
 
 **train:** A dictionary containing training-specific parameters, such as:
 

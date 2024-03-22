@@ -8,5 +8,5 @@ tiling:
   erosion: true
   tile_size: 512
 # MODEL SETTINGS
-model_version: 20240215_unet_retrained_resnet50 # required for infer_settlements.py script
+model_version: 20240215_unet_retrained_resnet50 # needed for infer_settlements.py script
 training: false
