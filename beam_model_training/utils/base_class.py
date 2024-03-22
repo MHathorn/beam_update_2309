@@ -52,7 +52,9 @@ class BaseClass:
         project_dir_path = Path(project_dir)
         if project_dir_path.exists():
             return project_dir_path
-        raise ImportError(f"The project directory {project_dir} could not be found.")
+        raise FileNotFoundError(
+            f"The project directory {project_dir} could not be found."
+        )
 
     def resolve_config_name(self, config_name):
         if config_name:
@@ -68,7 +70,7 @@ class BaseClass:
             raise ValueError(
                 "Couldn't resolve the configuration file to be used. Specify a value in the `config_name` argument."
             )
-        return config_files[0]
+        return config_files[0].name
 
     def load_config(self, config_path):
         """
@@ -150,8 +152,8 @@ class BaseClass:
             else:
                 # Raise an error if no directory or multiple directories are found
                 raise FileNotFoundError(
-                    f"Couldn't resolve model directory for {'finetuning' if finetune else 'evaluation'}.\
-                        Expected single directory or a valid `model_version` pointer. (model_version: {model_version})"
+                    f"Couldn't resolve model directory for {'finetuning' if finetune else 'evaluation'}."
+                    f"Expected single directory or a valid `model_version` pointer in configuration. (model_version: {model_version})"
                 )
 
         # Find all pickle files in the directory
