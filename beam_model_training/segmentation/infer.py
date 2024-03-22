@@ -98,6 +98,7 @@ class MapGenerator(BaseClass):
         self.erosion = self.config["tiling"]["erosion"]
 
     def get_crs(self, images_dir):
+        """Initializes the CRS from a directory of images, assuming the CRS is consistent across the directory."""
         images_dir_path = Path(images_dir)
         if any(images_dir_path.iterdir()):
             # Get the first image file

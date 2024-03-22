@@ -20,9 +20,16 @@ The configuration file is divided into three main sections:
 
 ## Data Settings
 
-**erosion:** A boolean value (true or false) indicating whether erosion is applied in the data processing step.
+**tiling**: A dictionary containing tiling-specific parameters, such as:
 
-**tile_size:** An integer defining the size of the tiles used in the experiment, e.g., 512.
+- **erosion:** A boolean value (true or false) indicating whether erosion is applied in the data processing step.
+
+- **tile_size:** An integer defining the size of the tiles used in the experiment, e.g., 512.
+
+- **distance_weighting**: A boolean value indicating whether to generate weight tiles, where each pixel is weighted according to the distance to an edge, as proposed [here](https://arxiv.org/abs/2107.12283).
+
+
+**training:** A boolean value (true or false) indicating whether the model is in the training phase.
 
 ## Model Settings
 
@@ -40,9 +47,8 @@ The configuration file is divided into three main sections:
 
 - **early_stopping**: Specifies whether early stopping is applied to the model training.
 
-- **pretrained**: Indicates whether the a pretrained model version is provided in the pretrained/ directory.
+- **finetune**: Indicates whether a pretrained model version is provided in the base_model/ directory.
 
-**training:** A boolean value (true or false) indicating whether the model is in the training phase.
 
 ## Usage
 
