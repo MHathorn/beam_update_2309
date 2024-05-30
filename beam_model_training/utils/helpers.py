@@ -114,6 +114,11 @@ def multiband_to_png(file_path, output_dir):
     # Open the TIFF file and convert it to PNG
     try:
         img = get_rgb_channels(tiff_file)
+        # Normalize the image values to the 0..1 range if they are floating-point
+        if img.dtype.kind == 'f':
+            img = (img - img.min()) / (img.max() - img.min())
+        elif img.dtype.kind in 'ui':
+            img = img / np.iinfo(img.dtype).max
         plt.imsave(png_file, np.transpose(img.values, (1, 2, 0)))
     except Exception as e:
         logging.error(f"An error occurred while converting {tiff_file}: {e}")
