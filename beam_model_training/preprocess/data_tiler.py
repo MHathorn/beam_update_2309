@@ -76,15 +76,22 @@ class DataTiler(BaseClass):
         self.spatial_resolution = None
         write_dirs = ["image_tiles"]
 
-        # Checking for images and loading in DataArrays
         images_dir = self.project_dir / self.DIR_STRUCTURE["images"]
+        dsm_dir = None
         if not images_dir.exists():
             raise IOError(
-                "The directory path `images` does not point to an existing directry in `project_dir`."
+                "The directory path `images` does not point to an existing directory in `project_dir`."
             )
-        self.images_generator = self._load_images(images_dir)
 
-        # Checking for masks and loading if exist
+        if self.config["tiling"].get("dsm", False):
+            dsm_dir = self.project_dir / self.DIR_STRUCTURE.get("dsm", "dsm")
+            if not dsm_dir.exists():
+                raise IOError(
+                    "The directory path `dsm` does not point to an existing directory in `project_dir`."
+                )
+
+        self.images_generator = self._load_images(images_dir, dsm_dir)
+
         labels_dir = self.project_dir / self.DIR_STRUCTURE["labels"]
         valid_label_paths = [
             l
@@ -103,7 +110,6 @@ class DataTiler(BaseClass):
             write_dirs += ["mask_tiles"]
             if self.tiling_params["distance_weighting"]:
                 write_dirs.append("weight_tiles")
-            # Loading labels from csv / shapefile.
             self.labels = self._load_labels(valid_label_paths)
 
         super().load_dir_structure(write_dirs=write_dirs)
@@ -119,33 +125,52 @@ class DataTiler(BaseClass):
             dict: Dictionary containing tiling parameters such as distance weighting,
                   whether to tile labels, erosion, and tile size.
         """
-        tiling_keys = ["distance_weighting", "erosion", "tile_size"]
+        tiling_keys = ["distance_weighting", "erosion", "tile_size", "dsm"]
         return {k: config["tiling"].get(k) for k in tiling_keys}
 
-    def _load_images(self, image_dir):
-        """
-        Loads all GeoTIFF images in the provided directory using rioxarray.
+    def _load_images(self, image_dir, dsm_dir):
+            """
+            Loads all GeoTIFF images in the provided directory using rioxarray.
 
-        Args:
-            image_dir (Path): Directory containing GeoTIFF images.
+            Args:
+                image_dir (Path): Directory containing GeoTIFF images.
+                dsm_dir (Path): Directory containing DSM (Digital Surface Model) files.
 
-        Yields:
-            DataArray: Single band from a GeoTIFF image as an xarray DataArray.
-        """
-        filepaths = [
-            img_path
-            for img_path in image_dir.rglob("*")
-            if img_path.suffix.lower() in [".tif", ".tiff"]
-        ]
+            Yields:
+                DataArray: Single band from a GeoTIFF image as an xarray DataArray.
 
-        if not filepaths:
-            raise IOError(
-                f"The directory {image_dir} does not contain any GeoTIFF images."
-            )
-        self.n_images = len(filepaths)
+            Raises:
+                IOError: If the directory does not contain any GeoTIFF images.
+                ValueError: If the filename format is unexpected.
+                IOError: If the DSM file is not found for an image.
+            """
+            rgb_files = [
+                img_path
+                for img_path in image_dir.rglob("*")
+                if img_path.suffix.lower() in [".tif", ".tiff"]
+            ]
 
-        for img_path in filepaths:
-            yield rxr.open_rasterio(img_path, default_name=img_path.stem)
+            if not rgb_files:
+                raise IOError(
+                    f"The directory {image_dir} does not contain any GeoTIFF images."
+                )
+            self.n_images = len(rgb_files)
+
+            for img_path in rgb_files:
+                image = rxr.open_rasterio(img_path, default_name=img_path.stem)
+                if self.config["tiling"].get("dsm", False):
+                    # Extract the relevant part of the filename to match DSM naming convention
+                    parts = img_path.stem.split('_')
+                    if len(parts) < 2:
+                        raise ValueError(f"Unexpected filename format: {img_path.stem}")
+                    dsm_name = f"{parts[-2]}_{parts[-1]}_elev.tif"
+                    dsm_path = dsm_dir / dsm_name
+                    if not dsm_path.exists():
+                        raise IOError(f"DSM file {dsm_path} not found for image {img_path}")
+                    dsm = rxr.open_rasterio(dsm_path, default_name=dsm_name)
+                    dsm = dsm.rio.reproject_match(image)
+                    image = xr.concat([image, dsm], dim="band")
+                yield image
 
     def _load_labels(self, labels_files):
         """
