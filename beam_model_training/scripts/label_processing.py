@@ -70,7 +70,7 @@ def process_all_exports(json_dir, img_dir, output_dir):
     - output_dir (Path): The directory where labels and images will be saved for training on labels.
     """
     file_gdfs = []
-    crs = "EPSG:32616"
+    crs = "EPSG:4326"
     json_files = [f for f in json_dir.iterdir() if f.suffix == ".json"]
     with tqdm(json_files, desc="Processing JSON files", unit="file") as pbar_json:
         for file in pbar_json:
