@@ -128,6 +128,7 @@ class MapGenerator(BaseClass):
             raise TypeError("mask_array must be a named DataArray.")
 
         if mask_da is None or mask_da.values.max() == 0:
+            logging.warning("Mask is empty or all zeros.")
             return gpd.GeoDataFrame(geometry=[])
 
         if mask_da.rio.crs is None:
@@ -145,15 +146,18 @@ class MapGenerator(BaseClass):
             mask_da.values, transform=mask_da.rio.transform()
         )
         polygons = [Polygon(shape[0]["coordinates"][0]) for shape in shapes]
+        if not polygons:
+            logging.warning("No polygons found in the mask.")
         gdf = gpd.GeoDataFrame(crs=self.crs, geometry=polygons)
 
         # Drop shapes that are too small or too large to be an informal settlement building
         gdf["bldg_area"] = gdf["geometry"].area
         max_area_idx = gdf["bldg_area"].idxmax()
         gdf = gdf.drop([max_area_idx])
-        gdf = gdf[(gdf["bldg_area"] > 2) & (gdf["bldg_area"] < 30000)]
+        #gdf = gdf[(gdf["bldg_area"] > 2) & (gdf["bldg_area"] < 30000)]
         # in case the geo-dataframe is empty which means no settlement buildings are detected
         if gdf.empty:
+            logging.warning("Filtered GeoDataFrame is empty after dropping small/large areas.")
             return gpd.GeoDataFrame(geometry=[])
 
         return gdf
