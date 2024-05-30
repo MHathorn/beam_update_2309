@@ -11,7 +11,8 @@ import xarray as xr
 from cv2 import erode
 from rasterio.features import rasterize
 from shapely import wkt
-from shapely.geometry import Polygon, box
+from shapely.geometry import MultiPolygon, Polygon, box
+from shapely.affinity import scale
 from shapely.ops import unary_union
 from scipy.ndimage import gaussian_filter
 from tqdm import tqdm
@@ -219,22 +220,34 @@ class DataTiler(BaseClass):
         data_path = directory / name
         data.rio.to_raster(data_path)
 
-    def generate_mask(self, image, labels, write=False):
+    def generate_mask(self, image, labels, write=False, shrink_factor=0.98):
         """
         Generates a binary mask from vector labels and optionally writes it to disk.
 
-        Polygons are created from the vector labels. The mask is then created and
-        eroded with a 3x3 kernel if erosion is enabled. Distance weights are calculated
+        Polygons are created from the vector labels, optionally shrunk, and then rasterized.
+        The mask is eroded with a 3x3 kernel if erosion is enabled. Distance weights are calculated
         if distance weighting is enabled.
 
         Args:
             image (DataArray): The image associated with the labels.
             labels (GeoDataFrame): The labels used to generate the mask.
             write (bool): If True, the generated mask and weights are written to disk.
+            shrink_factor (float): Factor by which to shrink the polygons.
 
         Returns:
             tuple: A tuple containing the mask and weights as DataArrays.
         """
+    
+        # Function to shrink polygons
+        def _shrink_polygon(polygon, shrink_factor):
+            if polygon.is_empty:
+                return polygon
+            elif polygon.geom_type == "MultiPolygon":
+                return MultiPolygon([scale(geom, xfact=shrink_factor, yfact=shrink_factor, origin='centroid') for geom in polygon.geoms])
+            elif polygon.geom_type == "Polygon":
+                return scale(polygon, xfact=shrink_factor, yfact=shrink_factor, origin='centroid')
+            else:
+                raise TypeError("Invalid geometry type")
 
         # Generate the mask
         def _poly_from_utm(polygon, transform):
@@ -274,8 +287,14 @@ class DataTiler(BaseClass):
         image_size = (image.shape[1], image.shape[2])
         transform = image.rio.transform()
 
+        # Avoid SettingWithCopyError by creating a copy of the labels DataFrame
+        labels_copy = labels.copy()
+        
+        # Shrink the polygons before rasterizing
+        labels_copy.loc[:, 'geometry'] = labels_copy['geometry'].apply(_shrink_polygon, shrink_factor=shrink_factor)
+    
         label_polygons = sum(
-            labels["geometry"].apply(_poly_from_utm, args=(transform,)), []
+            labels_copy["geometry"].apply(_poly_from_utm, args=(transform,)), []
         )  # converting all to lists of polygons, then concatenating.
         mask = np.full(image_size, 0, dtype=np.uint8)
         weights = np.full(image_size, 0, dtype=np.uint8)
