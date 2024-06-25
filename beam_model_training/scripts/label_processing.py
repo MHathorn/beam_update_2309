@@ -60,7 +60,7 @@ def copy_image_files(labels_gdf, img_dir, output_dir):
             logging.error(f"The source image {source_img.name} could not be found.")
 
 
-def process_all_exports(json_dir, img_dir, output_dir):
+def process_all_exports(json_dir, img_dir, output_dir, crs):
     """
     Process JSON files exported from LabelStudio and save them as shapefiles.
 
@@ -70,7 +70,6 @@ def process_all_exports(json_dir, img_dir, output_dir):
     - output_dir (Path): The directory where labels and images will be saved for training on labels.
     """
     file_gdfs = []
-    crs = "EPSG:4326"
     json_files = [f for f in json_dir.iterdir() if f.suffix == ".json"]
     with tqdm(json_files, desc="Processing JSON files", unit="file") as pbar_json:
         for file in pbar_json:
@@ -226,6 +225,12 @@ if __name__ == "__main__":
         required=True,
         help="The directory where labels and images will be saved for training on labels.",
     )
+    parser.add_argument(
+        "--crs",
+        type=str,
+        required=True,
+        help="The coordinate reference system to use for the output shapefile. If unsure, set to EPSG:4326.",
+    )    
 
     # Parse the command line arguments
     args = parser.parse_args()
@@ -234,9 +239,10 @@ if __name__ == "__main__":
     json_dir = Path(args.json_dir)
     img_dir = Path(args.img_dir)
     output_dir = Path(args.output_dir)
+    crs = args.crs
 
     # Process and save labels stored in the JSON directory exports
-    all_labels = process_all_exports(json_dir, img_dir, output_dir)
+    all_labels = process_all_exports(json_dir, img_dir, output_dir, crs)
     # Copy corresponding image tiles to a new sub-directory
     if all_labels is not None:
         copy_image_files(all_labels, img_dir, output_dir)
