@@ -245,7 +245,7 @@ class DataTiler(BaseClass):
         data_path = directory / name
         data.rio.to_raster(data_path)
 
-    def generate_mask(self, image, labels, write=False, shrink_factor=0.98):
+    def generate_mask(self, image, labels, write=False, shrink_factor=0.995):
         """
         Generates a binary mask from vector labels and optionally writes it to disk.
 
