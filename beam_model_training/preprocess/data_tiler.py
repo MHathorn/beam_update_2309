@@ -158,6 +158,22 @@ class DataTiler(BaseClass):
 
             for img_path in rgb_files:
                 image = rxr.open_rasterio(img_path, default_name=img_path.stem)
+
+                # Check if image is not uint8 and convert if necessary
+                if image.dtype != np.uint8:
+                    logging.info(f"Converting {img_path.name} to uint8...")
+                                # Check if clipping is necessary
+                    min_val = image.min().item()
+                    max_val = image.max().item()
+                    
+                    if min_val < 0 or max_val > 255:
+                        logging.warning(f"Image {img_path.name} contains values outside the 0-255 range. "
+                                        f"Min: {min_val}, Max: {max_val}. Clipping will be performed.")
+                        image = image.clip(0, 255)
+                    
+                    image = image.astype(np.uint8)
+
+
                 if self.config["tiling"].get("dsm", False):
                     # Extract the relevant part of the filename to match DSM naming convention
                     parts = img_path.stem.split('_')
