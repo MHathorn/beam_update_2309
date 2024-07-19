@@ -3,6 +3,7 @@ import logging
 import random
 
 import numpy as np
+import rasterio
 import rioxarray as rxr
 from utils.base_class import BaseClass
 import xarray as xr
@@ -200,23 +201,30 @@ class Trainer(BaseClass):
             ShowGraphCallback(),
         ]
         if self.train_params["architecture"].lower() == "u-net":
-            cbs.append(TensorBoardCallback(log_dir=tb_dir))
+            cbs.append(TensorBoardCallback(log_dir=tb_dir, trace_model=False))
         if self.train_params["early_stopping"]:
             cbs.append(EarlyStoppingCallback(patience=10))
         return cbs
 
+
     def get_y(self, x):
-        """
-        Get the mask for a given image. Label function for SegmentationDataLoaders.
+        mask_path = Path(str(x).replace("images", "masks"))
+        
+        # Read the mask file
+        with rasterio.open(mask_path) as src:
+            mask = src.read()
+        
+        # Assuming mask is now a 3D array with shape (channels, height, width)
+        # where channel 0 is building interior and channel 1 is edge
+        
+        # Create a combined mask
+        combined_mask = np.zeros(mask.shape[1:], dtype=np.uint8)
+        combined_mask[mask[0] > 0] = 1  # building interior
+        combined_mask[mask[1] > 0] = 2  # edge
+        
+        return PILMask.create(combined_mask)
 
-        Args:
-            x (str): Path to the image.
-
-        Returns:
-            PILMask: The mask for the image.
-        """
-        return self._get_mask(x, self.p2c_map)
-
+       
     def check_dataset_balance(self, sample_size=50):
         """
         This function checks the balance of the dataset by calculating the ratio of pixels that belong to buildings in each image and plotting the histogram.
@@ -370,10 +378,10 @@ class Trainer(BaseClass):
                 self.learner = unet_learner(
                     dls,
                     backbones.get(self.train_params["backbone"]),
-                    n_out=2,
+                    n_out=3,
                     loss_func=loss_functions.get(self.train_params["loss_function"]),
-                    metrics=[Dice(), JaccardCoeff()],
-                )
+                    metrics=[DiceMulti(), JaccardCoeffMulti()],
+                ).to_fp16()
 
     def run(self):
         """
