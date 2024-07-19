@@ -9,6 +9,7 @@ import rioxarray as rxr
 import xarray as xr
 
 from cv2 import erode
+from cv2 import dilate
 from rasterio.features import rasterize
 from shapely import wkt
 from shapely.geometry import MultiPolygon, Polygon, box
@@ -315,11 +316,23 @@ class DataTiler(BaseClass):
 
         # Generate data array
         def _create_data_array(data, transform, image):
-            data_da = xr.DataArray(
-                data,
-                dims=["y", "x"],
-                coords={"x": image.coords["x"], "y": image.coords["y"]},
-            )
+            
+            if data.ndim == 3:
+                data_da = xr.DataArray(
+                    data,
+                    dims=["band", "y", "x"],
+                    coords={
+                        "band": ["building", "edge"],
+                        "x": image.coords["x"],
+                        "y": image.coords["y"]
+                    },
+                )
+            else:
+                data_da = xr.DataArray(
+                    data,
+                    dims=["y", "x"],
+                    coords={"x": image.coords["x"], "y": image.coords["y"]},
+                )
             data_da = data_da.rio.write_crs(self.crs)
             data_da = data_da.rio.write_transform(transform)
 
@@ -334,37 +347,52 @@ class DataTiler(BaseClass):
         # Shrink the polygons before rasterizing
         labels_copy.loc[:, 'geometry'] = labels_copy['geometry'].apply(_shrink_polygon, shrink_factor=shrink_factor)
     
-        label_polygons = sum(
+        building_polygons = sum(
             labels_copy["geometry"].apply(_poly_from_utm, args=(transform,)), []
         )  # converting all to lists of polygons, then concatenating.
-        mask = np.full(image_size, 0, dtype=np.uint8)
+        edge_polygons = [poly.boundary for poly in building_polygons]
+        building_mask = np.full(image_size, 0, dtype=np.uint8)
         weights = np.full(image_size, 0, dtype=np.uint8)
+        edge_mask = np.full(image_size, 0, dtype=np.uint8)
 
-        if len(label_polygons) > 0:
-            mask = rasterize(
-                shapes=label_polygons,
+        if len(building_polygons) > 0:
+            building_mask = rasterize(
+                shapes=building_polygons,
                 out_shape=image_size,
                 default_value=255,
                 dtype="uint8",
+            )
+            edge_mask = rasterize(
+            shapes=edge_polygons,
+            out_shape=image_size,
+            default_value=255,
+            dtype="uint8",
             )
 
             # Eroding masks, as proposed in https://arxiv.org/abs/2107.12283
             if self.tiling_params["erosion"]:
                 kernel = np.ones((3, 3), np.uint8)
-                mask = erode(mask, kernel, iterations=1)
+                building_mask = erode(building_mask, kernel, iterations=1)
+                edge_mask = dilate(edge_mask, kernel, iterations=1)
 
             # Generating gaussian weights, as proposed in https://arxiv.org/abs/2107.12283
             if self.tiling_params["distance_weighting"]:
-                edge_polygons = [poly.boundary for poly in label_polygons]
+                edge_polygons = [poly.boundary for poly in building_polygons]
                 weights = rasterize(
                     shapes=edge_polygons,
                     out_shape=image_size,
-                    default_value=255,
-                    dtype="uint8",
+                    default_value=0,
+                    dtype="float32",
                 )
-                weights = gaussian_filter(weights, sigma=0.5) * 200
+                weights = gaussian_filter(weights, sigma=0.5)
+                weights = weights / weights.max()
 
-        mask_da = _create_data_array(mask, transform, image)
+            #ensure that building mask and edge mask are not overlapping
+            building_mask[edge_mask == 255] = 0
+            # Combine into a three-class mask
+            combined_mask = np.stack([building_mask, edge_mask], axis=0)
+
+        mask_da = _create_data_array(combined_mask, transform, image)
         weights_da = _create_data_array(weights, transform, image)
 
         if write:
