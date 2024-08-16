@@ -5,6 +5,7 @@ from pathlib import Path
 
 import cv2
 import geopandas as gpd
+import math
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -13,17 +14,16 @@ import rioxarray as rxr
 import torch
 import xarray as xr
 from fastai.vision.all import *
-from matplotlib.colors import ListedColormap
 from PIL import Image
 from pyproj import CRS
 from rioxarray.merge import merge_arrays
-from shapely.geometry import Polygon, box, LineString
-from shapely.ops import orient
-from scipy.stats import mode
+from shapely.geometry import Polygon, box, MultiPolygon
+from shapely.affinity import rotate
 from scipy import ndimage
+from scipy.ndimage import median_filter
 from skimage.segmentation import watershed
 from skimage.feature import peak_local_max
-from skimage.morphology import remove_small_objects
+from skimage.morphology import remove_small_objects, remove_small_holes
 from tqdm import tqdm
 
 from preprocess.sample import tile_in_settlement
@@ -88,6 +88,7 @@ class MapGenerator(BaseClass):
         read_dirs = ["test_images", "models"]
         prediction_dirs = ["predictions", "shapefiles"]
         self.generate_preds = generate_preds
+        self.use_edge_detection = "edge" in self.config.get("codes", [])
         if self.generate_preds:
             super().load_dir_structure(read_dirs=read_dirs, write_dirs=prediction_dirs)
         else:
@@ -104,8 +105,57 @@ class MapGenerator(BaseClass):
                 raise KeyError(f"Config must have a value for {e}.")
         self.crs = self.get_crs(self.test_images_dir)
         self.erosion = self.config["tiling"]["erosion"]
-        self.min_building_area = 2
-        self.max_building_area = 30000
+        self._load_edge_guided_params()
+        self._load_regularization_params()
+
+    def _load_edge_guided_params(self):
+        """
+        Load edge-guided segmentation parameters.
+        """
+        edge_guided_keys = ["building_threshold", "edge_threshold", "min_building_size", "max_hole_size", "morph_kernel_size"]
+        self.edge_guided_params = {k: self.config.get("edge_guided_segmentation", {}).get(k) for k in edge_guided_keys}
+        
+        # Set default values if not provided
+        defaults = {
+            "building_threshold": 0.3,
+            "edge_threshold": 0.1,
+            "min_building_size": 50,
+            "max_hole_size": 50,
+            "morph_kernel_size": 5
+        }
+        
+        for k, v in defaults.items():
+            if self.edge_guided_params[k] is None:
+                self.edge_guided_params[k] = v
+        
+        # Set as attributes
+        for k, v in self.edge_guided_params.items():
+            setattr(self, k, v)
+
+    def _load_regularization_params(self):
+        """
+        Load regularization parameters.
+        """
+        regularization_keys = ["simplify_tolerance", "buffer_distance", "use_mbr", "mbr_threshold", "min_building_area", "max_building_area"]
+        self.regularization_params = {k: self.config.get("regularization", {}).get(k) for k in regularization_keys}
+        
+        # Set default values if not provided
+        defaults = {
+            "simplify_tolerance": 1.0,
+            "buffer_distance": 0.2,
+            "use_mbr": True,
+            "mbr_threshold": 0.85,
+            "min_building_area": 2,
+            "max_building_area": 30000
+        }
+        
+        for k, v in defaults.items():
+            if self.regularization_params[k] is None:
+                self.regularization_params[k] = v
+        
+        # Set as attributes
+        for k, v in self.regularization_params.items():
+            setattr(self, k, v)    
 
     def get_crs(self, images_dir):
         """Initializes the CRS from a directory of images, assuming the CRS is consistent across the directory."""
@@ -152,60 +202,45 @@ class MapGenerator(BaseClass):
         #     mask_da.values = cv2.dilate(mask_da.values, kernel, iterations=1)
 
         # Extract all connected component and turn to polygons
+        
+        mask_values = mask_da.values
+        filtered_mask = self.apply_median_filter_to_labels(mask_values, size=3)
         shapes = rasterio.features.shapes(
-            mask_da.values.astype(np.uint8), transform=mask_da.rio.transform()
+            filtered_mask.astype(np.uint8), transform=mask_da.rio.transform()
         )
         polygons = [Polygon(shape[0]["coordinates"][0]) for shape in shapes]
         if not polygons:
             logging.warning("No polygons found in the mask.")
         gdf = gpd.GeoDataFrame(crs=self.crs, geometry=polygons)
 
+        # Project to an equal area projection for regularization
+        if gdf.crs.is_geographic:
+            gdf_projected = gdf.to_crs({'proj':'cea'})
+        else:
+            gdf_projected = gdf
 
-        # simplified_count = 0
-        # regularized_count = 0
-        # unchanged_count = 0
-        # invalid_count = 0
+        regularized_polygons = []
+        for idx, poly in tqdm(enumerate(gdf_projected.geometry), desc="Regularizing polygons", total=len(gdf_projected)):
+            if poly.is_valid and not poly.is_empty and len(poly.exterior.coords) > 3:
+                dominant_angle = self._calculate_dominant_angle(poly)
+                rotated = rotate(poly, -dominant_angle, origin='centroid')
+                regularized = self.regularize_polygon(rotated, 
+                                                    simplify_tolerance=0.5, 
+                                                    buffer_distance=0.1, 
+                                                    use_mbr=True, 
+                                                    mbr_threshold=0.6)
+                regularized_rotated = rotate(regularized, dominant_angle, origin='centroid')
+                regularized_polygons.append(regularized_rotated)
+            else:
+                regularized_polygons.append(poly)
 
-        # regularized_polygons = []
-        # for idx, poly in tqdm(enumerate(gdf.geometry), desc="Regularizing polygons", total=len(gdf)):
-        #     if poly.is_valid and not poly.is_empty and len(poly.exterior.coords) > 3:
-        #         original_points = len(poly.exterior.coords)
-        #         original_area = poly.area
-        #         regularized_poly = self._regularize_polygon(poly)
-        #         regularized_points = len(regularized_poly.exterior.coords)
-        #         regularized_area = regularized_poly.area
-                
-        #         if regularized_poly.equals(poly):
-        #             unchanged_count += 1
-        #             logging.debug(f"Polygon {idx}: Unchanged ({original_points} points)")
-        #         elif not regularized_poly.is_valid:
-        #             invalid_count += 1
-        #             logging.warning(f"Polygon {idx}: Regularization resulted in an invalid polygon. Keeping original.")
-        #             regularized_poly = poly
-        #         elif regularized_points < original_points:
-        #             if abs(regularized_area - original_area) / original_area < 0.05:  # Less than 5% area change
-        #                 simplified_count += 1
-        #                 logging.debug(f"Polygon {idx}: Simplified from {original_points} to {regularized_points} points")
-        #             else:
-        #                 regularized_count += 1
-        #                 logging.debug(f"Polygon {idx}: Regularized from {original_points} to {regularized_points} points")
-        #         else:
-        #             regularized_count += 1
-        #             logging.debug(f"Polygon {idx}: Regularized from {original_points} to {regularized_points} points")
-                
-        #         regularized_polygons.append(regularized_poly)
-        #     else:
-        #         logging.warning(f"Polygon {idx} is invalid, empty, or has less than 4 points. Keeping original polygon.")
-        #         regularized_polygons.append(poly)
-        #         unchanged_count += 1
+        gdf_projected['geometry'] = regularized_polygons
 
-        # gdf['geometry'] = regularized_polygons
-
-        # logging.info(f"Regularization results:")
-        # logging.info(f"  Simplified: {simplified_count}")
-        # logging.info(f"  Regularized: {regularized_count}")
-        # logging.info(f"  Unchanged: {unchanged_count}")
-        # logging.info(f"  Invalid (kept original): {invalid_count}")
+        # Project back to original CRS if necessary
+        if gdf.crs.is_geographic:
+            gdf = gdf_projected.to_crs(self.crs)
+        else:
+            gdf = gdf_projected
 
 
 
@@ -225,6 +260,19 @@ class MapGenerator(BaseClass):
             return gpd.GeoDataFrame(geometry=[])
 
         return gdf
+
+   
+
+    def apply_median_filter_to_labels(self, labeled_mask, size=3):
+        unique_labels = np.unique(labeled_mask)
+        filtered_mask = np.zeros_like(labeled_mask)
+        for label in unique_labels:
+            if label == 0:  # background
+                continue
+            mask = labeled_mask == label
+            filtered = median_filter(mask.astype(np.uint8), size=size)
+            filtered_mask[filtered > 0] = label
+        return filtered_mask    
 
     def _group_tiles_by_connected_area(self, mask_tiles, boundaries_gdf, primary_key):
         """
@@ -357,7 +405,7 @@ class MapGenerator(BaseClass):
     
     def _calculate_area(self, gdf):
         """
-        Private method to calculate areas for geometries in a GeoDataFrame.
+        Private method to calculate areas for geometries in a GeoDataFrame, reprojecting if necessary.
         
         Args:
             gdf (GeoDataFrame): Input GeoDataFrame with geometries.
@@ -365,91 +413,70 @@ class MapGenerator(BaseClass):
         Returns:
             GeoDataFrame: Input GeoDataFrame with added 'bldg_area' column.
         """
-        crs = CRS(gdf.crs)
+        original_crs = gdf.crs
         
-        if crs.is_geographic:
-            gdf['bldg_area'] = gdf.geometry.to_crs({'proj':'cea'}).area
+        if original_crs.is_geographic:
+            # Project to an equal area projection
+            gdf_projected = gdf.to_crs({'proj':'cea'})
+            gdf['bldg_area'] = gdf_projected.area
         else:
-            gdf['bldg_area'] = gdf.geometry.area
+            gdf['bldg_area'] = gdf.area
         
         return gdf    
     
-    def _simplify_polygon(self, polygon, tolerance=0.5):
-        """Simplify a polygon using Douglas-Peucker algorithm while ensuring validity."""
-        simplified = polygon.simplify(tolerance, preserve_topology=True)
-        if simplified.is_valid:
-            return simplified
-        return polygon
+    def regularize_polygon(self, polygon, simplify_tolerance=1.0, buffer_distance=0.5, use_mbr=False, mbr_threshold=0.85):
+        """
+        Regularize a polygon using simplification, buffering, and optionally minimum bounding rectangle.
 
-    def _remove_small_angles(self, coords, min_angle):
-        """Remove points that create small angles."""
-        if len(coords) < 4:
-            return coords
-        
-        new_coords = [coords[0]]
-        for i in range(1, len(coords) - 1):
-            v1 = coords[i] - coords[i-1]
-            v2 = coords[i+1] - coords[i]
-            angle = np.abs(np.degrees(np.arctan2(np.cross(v1, v2), np.dot(v1, v2))))
-            if angle > min_angle:
-                new_coords.append(coords[i])
-        new_coords.append(coords[-1])
-        return np.array(new_coords)
-    
-    def _snap_to_right_angles(self, coords, snap_threshold):
-        """Snap angles close to 90 degrees."""
-        new_coords = [coords[0]]
-        for i in range(1, len(coords) - 1):
-            v1 = coords[i] - coords[i-1]
-            v2 = coords[i+1] - coords[i]
-            angle = np.degrees(np.arctan2(np.cross(v1, v2), np.dot(v1, v2))) % 360
-            if abs(angle - 90) < snap_threshold or abs(angle - 270) < snap_threshold:
-                # Snap to right angle
-                v2_snapped = np.array([-v1[1], v1[0]])  # Rotate v1 by 90 degrees
-                new_point = coords[i] + v2_snapped * (np.dot(v2, v2_snapped) / np.dot(v2_snapped, v2_snapped))
-                new_coords.append(new_point)
-            else:
-                new_coords.append(coords[i])
-        new_coords.append(coords[-1])
-        return np.array(new_coords)    
+        Parameters:
+        - polygon: Shapely Polygon or MultiPolygon
+        - simplify_tolerance: Tolerance for polygon simplification
+        - buffer_distance: Distance for buffer operations
+        - use_mbr: Whether to consider using minimum bounding rectangle
+        - mbr_threshold: Threshold for deciding to use MBR (based on area ratio)
 
-    def _regularize_polygon(self, polygon):
-        """Regularize a polygon while ensuring it remains valid."""
-        try:
-            # Initial simplification
-            simplified = self._simplify_polygon(polygon, tolerance=0.5)
-            
-            if simplified.geom_type != 'Polygon':
-                logging.warning(f"Simplification resulted in a {simplified.geom_type}. Keeping original polygon.")
-                return polygon
-
-            # Get coordinates
-            coords = np.array(simplified.exterior.coords)
-
-            # Ensure we have at least 4 points
-            if len(coords) < 4:
-                logging.warning(f"Polygon has less than 4 points after simplification. Keeping original polygon.")
-                return polygon
-
-            # Remove small angles
-            new_coords = self._remove_small_angles(coords[:-1], min_angle=10)  # Exclude last point (same as first)
-
-
-            # Create new polygon
-            new_polygon = Polygon(new_coords)
-
-            if not new_polygon.is_valid:
-                logging.warning("Regularization resulted in an invalid polygon. Keeping original polygon.")
-                return polygon
-
-            # Ensure the polygon has the same orientation as the original
-            new_polygon = orient(new_polygon, sign=1.0)
-
-            return new_polygon
-
-        except Exception as e:
-            logging.error(f"Error in _regularize_polygon: {str(e)}")
+        Returns:
+        - Regularized Shapely Polygon or MultiPolygon
+        """
+        if polygon.is_empty or polygon.area == 0:
             return polygon
+
+        # Handle MultiPolygons
+        if isinstance(polygon, MultiPolygon):
+            return MultiPolygon([self.regularize_polygon(p, simplify_tolerance, buffer_distance, use_mbr, mbr_threshold) for p in polygon.geoms])
+
+        # Simplify
+        simplified = polygon.simplify(simplify_tolerance, preserve_topology=True)
+        
+        # Smooth using buffer
+        smoothed = simplified.buffer(-buffer_distance).buffer(buffer_distance)
+        
+        # Fill holes
+        filled = smoothed.buffer(0)
+
+        if use_mbr and filled.area > 0:
+            # Calculate the minimum bounding rectangle
+            mbr = filled.minimum_rotated_rectangle
+            
+            # Calculate area ratio, avoiding division by zero
+            if mbr.area > 0:
+                area_ratio = filled.area / mbr.area
+                
+                # If the area ratio is above the threshold, use the MBR
+                if area_ratio > mbr_threshold:
+                    return mbr
+
+        return filled
+
+    def _calculate_dominant_angle(self, polygon):
+        """Calculate the dominant angle of a polygon."""
+        coords = np.array(polygon.exterior.coords)
+        edges = np.diff(coords, axis=0)
+        angles = np.arctan2(edges[:, 1], edges[:, 0])
+        hist, _ = np.histogram(angles, bins=18, range=(-np.pi, np.pi))
+        dominant_angle = (np.argmax(hist) * np.pi / 9) - np.pi
+        return np.degrees(dominant_angle)
+
 
 
 
@@ -496,21 +523,24 @@ class MapGenerator(BaseClass):
         # Extract building and edge probabilities
         background_prob = class_probs[0, :, :]
         building_prob = class_probs[1, :, :]
-        edge_prob = class_probs[2, :, :]
-        
-        building_threshold = 0.3
-        edge_threshold = 0.6
 
-        # Apply watershed segmentation
-        building_mask = self.watershed_segmentation(
-            building_prob, 
-            edge_prob, 
-            background_prob,
-            building_threshold=building_threshold,  # Increase this if you're getting too many false positives
-            edge_threshold=edge_threshold,       
-            min_distance=5,          # Increase this if buildings are being over-segmented
-            min_size=20              # Increase this to remove smaller segmented areas
+        if self.use_edge_detection:
+            edge_prob = class_probs[2, :, :]
+            initial_mask = (1 - (edge_prob > self.edge_threshold).astype(np.uint8)) * (building_prob > self.building_threshold).astype(np.uint8)
+            
+            building_mask = self.edge_guided_segmentation(
+                building_prob, 
+                edge_prob,
+                building_threshold=self.building_threshold,
+                edge_threshold=self.edge_threshold,
+                min_building_size=self.min_building_size,
+                max_hole_size=self.max_hole_size,
+                morph_kernel_size=self.morph_kernel_size
             )
+        else:
+            edge_prob = None
+            initial_mask = (building_prob > self.building_threshold).astype(np.uint8)
+            building_mask = initial_mask.copy()
 
         inference_path = self.predictions_dir / f"{image_file.stem}_INFERENCE.TIF"
 
@@ -527,8 +557,9 @@ class MapGenerator(BaseClass):
 
         viz_path = self.predictions_dir / f"{image_file.stem}_visualizations.png"
         rgb_image = tile.data.transpose(1, 2, 0)  # Convert to HWC format for visualization
-        self.save_threshold_visualizations(rgb_image, building_prob, edge_prob, building_mask, 
-                                    building_threshold, edge_threshold, viz_path)
+        self.save_threshold_visualizations(rgb_image, building_prob, edge_prob, 
+                                   initial_mask, building_mask,  # Note the addition of initial_mask here
+                                   self.building_threshold, self.edge_threshold, viz_path)
 
 
         # Generate shapefile
@@ -543,43 +574,47 @@ class MapGenerator(BaseClass):
         return output_da
 
 
-    def watershed_segmentation(self, building_prob, edge_prob, background_prob=None, 
-                            building_threshold=0.3, edge_threshold=0.3, 
-                            min_distance=4, min_size=15):
-        # Use building probability as the base for segmentation
+    def edge_guided_segmentation(self, building_prob, edge_prob=None, 
+                                building_threshold=0.3, edge_threshold=0.3, 
+                                min_building_size=15, max_hole_size=10, 
+                                morph_kernel_size=3):
+        
+        if edge_prob is None:
+            return (building_prob > building_threshold).astype(np.uint8)
+        # Create edge mask
+        edge_mask = (edge_prob > edge_threshold).astype(np.uint8)
+        
+        # Create building mask
         building_mask = (building_prob > building_threshold).astype(np.uint8)
         
-        # Apply threshold to edge probability
-        strong_edges = (edge_prob > edge_threshold).astype(np.uint8)
-        
-        # If we have background probability, use it to refine the mask
-        if background_prob is not None:
-            building_mask[background_prob > building_prob] = 0
-        
-        # Compute distance transform on the building mask
-        distance = ndimage.distance_transform_edt(building_mask)
-        
-        # Find local maxima in the distance transform
-        coordinates = peak_local_max(distance, min_distance=min_distance, labels=building_mask)
-        
-        # Create a marker array for watershed
-        markers = np.zeros(distance.shape, dtype=np.uint8)
-        markers[tuple(coordinates.T)] = np.arange(1, len(coordinates) + 1)
-        
-        # Prepare the image for watershed
-        # We invert the building probability and add the thresholded edge probability
-        watershed_image = 1 - building_prob + strong_edges
-        
-        # Apply watershed
-        labels = watershed(watershed_image, markers, mask=building_mask)
+        # Combine edge and building information
+        combined_mask = (1 - edge_mask) * building_mask
         
         # Remove small objects
-        labels = remove_small_objects(labels, min_size=min_size)
+        cleaned_mask = remove_small_objects(combined_mask.astype(bool), min_size=min_building_size)
         
-        return labels
-    
-    def save_threshold_visualizations(self, rgb_image, building_prob, edge_prob, final_mask, 
-                                  building_threshold, edge_threshold, output_path):
+        # Convert back to uint8
+        cleaned_mask = cleaned_mask.astype(np.uint8)
+        
+        # Create kernel for morphological operations
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (morph_kernel_size, morph_kernel_size))
+        
+        # Perform morphological closing to close small gaps
+        closed_mask = cv2.morphologyEx(cleaned_mask, cv2.MORPH_CLOSE, kernel)
+        
+        # Perform morphological opening to remove small protrusions
+        opened_mask = cv2.morphologyEx(closed_mask, cv2.MORPH_OPEN, kernel)
+        
+        # Fill small holes
+        filled_mask = remove_small_holes(opened_mask.astype(bool), area_threshold=max_hole_size)
+        
+        # Final erosion to tighten boundaries
+        #eroded_mask = cv2.erode(filled_mask.astype(np.uint8), kernel, iterations=1)
+        
+        return filled_mask
+
+    def save_threshold_visualizations(self, rgb_image, building_prob, edge_prob, initial_mask, final_mask, 
+                                    building_threshold, edge_threshold, output_path):
         fig, axs = plt.subplots(3, 2, figsize=(12, 18))
         
         # Original RGB image
@@ -587,15 +622,9 @@ class MapGenerator(BaseClass):
         axs[0, 0].set_title('Original RGB Image')
         axs[0, 0].axis('off')
         
-        # Final mask
-        # Create a colormap for the segmentation mask
-        n_labels = final_mask.max()
-        colors = plt.cm.get_cmap('tab20')(np.linspace(0, 1, n_labels))
-        colors = np.vstack(([0, 0, 0, 1], colors))  # Add black color for background
-        custom_cmap = ListedColormap(colors)
-        
-        axs[0, 1].imshow(final_mask, cmap=custom_cmap)
-        axs[0, 1].set_title('Final Segmentation Mask')
+        # Initial combined mask
+        axs[0, 1].imshow(initial_mask, cmap='binary')
+        axs[0, 1].set_title('Initial Combined Mask')
         axs[0, 1].axis('off')
         
         # Building probability
@@ -603,25 +632,25 @@ class MapGenerator(BaseClass):
         axs[1, 0].set_title('Building Probability')
         axs[1, 0].axis('off')
         
-        # Thresholded building mask
-        axs[1, 1].imshow(building_prob > building_threshold, cmap='binary')
-        axs[1, 1].set_title(f'Building Mask (threshold={building_threshold})')
+        # Edge probability
+        axs[1, 1].imshow(edge_prob, cmap='viridis')
+        axs[1, 1].set_title('Edge Probability')
         axs[1, 1].axis('off')
         
-        # Edge probability
-        axs[2, 0].imshow(edge_prob, cmap='viridis')
-        axs[2, 0].set_title('Edge Probability')
+        # Thresholded building mask
+        axs[2, 0].imshow(building_prob > building_threshold, cmap='binary')
+        axs[2, 0].set_title(f'Building Mask (threshold={building_threshold})')
         axs[2, 0].axis('off')
         
-        # Thresholded edge mask
-        axs[2, 1].imshow(edge_prob > edge_threshold, cmap='binary')
-        axs[2, 1].set_title(f'Strong Edges (threshold={edge_threshold})')
+        # Final cleaned mask
+        axs[2, 1].imshow(final_mask, cmap='binary')
+        axs[2, 1].set_title('Final Cleaned Mask')
         axs[2, 1].axis('off')
         
         plt.tight_layout()
         plt.savefig(output_path, dpi=300, bbox_inches='tight')
         plt.close(fig)
-        
+
     def create_tile_inferences(
         self, image_files=None, boundaries_gdf=None, write_shp=True, parallel=True
     ):

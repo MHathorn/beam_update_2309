@@ -127,7 +127,9 @@ class DataTiler(BaseClass):
                   whether to tile labels, erosion, and tile size.
         """
         tiling_keys = ["distance_weighting", "erosion", "tile_size", "dsm"]
-        return {k: config["tiling"].get(k) for k in tiling_keys}
+        params = {k: config["tiling"].get(k) for k in tiling_keys}
+        params["codes"] = config.get("codes", [])
+        return params
 
     def _load_images(self, image_dir, dsm_dir):
             """
@@ -262,7 +264,7 @@ class DataTiler(BaseClass):
         data_path = directory / name
         data.rio.to_raster(data_path)
 
-    def generate_mask(self, image, labels, write=False, shrink_factor=0.995):
+    def generate_mask(self, image, labels, write=False, shrink_factor=1):
         """
         Generates a binary mask from vector labels and optionally writes it to disk.
 
@@ -350,10 +352,15 @@ class DataTiler(BaseClass):
         building_polygons = sum(
             labels_copy["geometry"].apply(_poly_from_utm, args=(transform,)), []
         )  # converting all to lists of polygons, then concatenating.
-        edge_polygons = [poly.boundary for poly in building_polygons]
         building_mask = np.full(image_size, 0, dtype=np.uint8)
+        
+        include_edge = "edge" in self.tiling_params["codes"]
+        
+        if include_edge:
+            edge_polygons = [poly.boundary for poly in building_polygons]
+            edge_mask = np.full(image_size, 0, dtype=np.uint8)
+        
         weights = np.full(image_size, 0, dtype=np.uint8)
-        edge_mask = np.full(image_size, 0, dtype=np.uint8)
 
         if len(building_polygons) > 0:
             building_mask = rasterize(
@@ -362,12 +369,14 @@ class DataTiler(BaseClass):
                 default_value=255,
                 dtype="uint8",
             )
-            edge_mask = rasterize(
-            shapes=edge_polygons,
-            out_shape=image_size,
-            default_value=255,
-            dtype="uint8",
-            )
+
+            if include_edge:
+                edge_mask = rasterize(
+                shapes=edge_polygons,
+                out_shape=image_size,
+                default_value=255,
+                dtype="uint8",
+                )
 
             # Eroding masks, as proposed in https://arxiv.org/abs/2107.12283
             if self.tiling_params["erosion"]:
@@ -387,10 +396,13 @@ class DataTiler(BaseClass):
                 weights = gaussian_filter(weights, sigma=0.5)
                 weights = weights / weights.max()
 
-            #ensure that building mask and edge mask are not overlapping
-            building_mask[edge_mask == 255] = 0
-            # Combine into a three-class mask
-            combined_mask = np.stack([building_mask, edge_mask], axis=0)
+            if include_edge:
+                #ensure that building mask and edge mask are not overlapping
+                building_mask[edge_mask == 255] = 0
+                # Combine into a three-class mask
+                combined_mask = np.stack([building_mask, edge_mask], axis=0)
+            else:
+                combined_mask = building_mask
 
         mask_da = _create_data_array(combined_mask, transform, image)
         weights_da = _create_data_array(weights, transform, image)

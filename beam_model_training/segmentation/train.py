@@ -214,14 +214,21 @@ class Trainer(BaseClass):
         with rasterio.open(mask_path) as src:
             mask = src.read()
         
+        # Check if we have an edge class
+        has_edge = "edge" in self.params["codes"]
+
         # Assuming mask is now a 3D array with shape (channels, height, width)
         # where channel 0 is building interior and channel 1 is edge
         
         # Create a combined mask
         combined_mask = np.zeros(mask.shape[1:], dtype=np.uint8)
-        combined_mask[mask[0] > 0] = 1  # building interior
-        combined_mask[mask[1] > 0] = 2  # edge
+        if has_edge:
+            combined_mask[mask[0] > 0] = 1  # building interior
+            combined_mask[mask[1] > 0] = 2  # edge
         
+        else:
+            combined_mask[mask[0] > 0] = 1 # building interior for binary mask
+
         return PILMask.create(combined_mask)
 
        
@@ -375,10 +382,11 @@ class Trainer(BaseClass):
                     "resnet101": resnet101,
                     "vgg16_bn": vgg16_bn,
                 }
+                n_out = len(self.params["codes"])
                 self.learner = unet_learner(
                     dls,
                     backbones.get(self.train_params["backbone"]),
-                    n_out=3,
+                    n_out=n_out,
                     loss_func=loss_functions.get(self.train_params["loss_function"]),
                     metrics=[DiceMulti(), JaccardCoeffMulti()],
                 ).to_fp16()
