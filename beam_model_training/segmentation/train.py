@@ -8,8 +8,8 @@ import rioxarray as rxr
 from utils.base_class import BaseClass
 import xarray as xr
 from fastai.vision.all import *
+from fastai.distributed import *
 from fastai.callback.tensorboard import TensorBoardCallback
-from semtorch import get_segmentation_learner
 from segmentation.losses import (
     CombinedLoss,
     DualFocalLoss,
@@ -198,12 +198,15 @@ class Trainer(BaseClass):
         tb_dir = str(self.run_dir / "tb_logs/")
         cbs = [
             CSVLogger(fname=csv_path),
-            ShowGraphCallback(),
+            # ShowGraphCallback(),
         ]
         if self.train_params["architecture"].lower() == "u-net":
             cbs.append(TensorBoardCallback(log_dir=tb_dir, trace_model=False))
         if self.train_params["early_stopping"]:
             cbs.append(EarlyStoppingCallback(patience=10))
+        # if not rank_distrib():
+        #     cbs.append(ProgressCallback())    
+        logging.info(f"Rank {rank_distrib()}: Callbacks: {cbs}")
         return cbs
 
 
@@ -330,7 +333,7 @@ class Trainer(BaseClass):
             codes=self.params["codes"],
             seed=self.params["seed"],
             batch_tfms=tfms,
-            valid_pct=self.params["test_size"],
+            valid_pct=self.params["test_size"]
         )
         return dls
 
@@ -342,7 +345,8 @@ class Trainer(BaseClass):
         dataloaders to the existing learner or creates a new learner with the specified
         parameters.
         """
-        self.model_name = f"{self.train_params['architecture']}_{timestamp()}"
+        run_id = f"{timestamp()}_{rank_distrib():02d}"
+        self.model_name = f"{self.train_params['architecture']}_{run_id}"
         self.run_dir = BaseClass.create_if_not_exists(self.models_dir / self.model_name)
 
         tfms = self.setup_data_transforms()
@@ -355,17 +359,7 @@ class Trainer(BaseClass):
         else:
             # if self.params["distance_weighting"]: # not functional
             #     self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
-            if self.train_params["architecture"].lower() == "hrnet":
-                self.learner = get_segmentation_learner(
-                    dls,
-                    number_classes=2,
-                    segmentation_type="Semantic Segmentation",
-                    architecture_name="hrnet",
-                    backbone_name=self.train_params["backbone"],
-                    model_dir=self.models_dir,
-                    metrics=[Dice()],
-                ).to_fp16()
-            elif self.train_params["architecture"].lower() == "u-net":
+            if self.train_params["architecture"].lower() == "u-net":
                 loss_functions = {
                     "Dual_Focal_loss": DualFocalLoss(),
                     "CombinedLoss": CombinedLoss(),
@@ -391,6 +385,9 @@ class Trainer(BaseClass):
                     metrics=[DiceMulti(), JaccardCoeffMulti()],
                 ).to_fp16()
 
+            self.learner.remove_cb(ProgressCallback)
+            self.learner.remove_cb(ShowGraphCallback)
+
     def run(self):
         """
         Train a model based on the given parameters. It supports both HRNet and U-Net architectures.
@@ -401,9 +398,17 @@ class Trainer(BaseClass):
         """
         self.set_learner()
 
-        self.learner.fit_one_cycle(self.train_params["epochs"], cbs=self._callbacks())
-        model_path = self._save()
-        return model_path
+        logging.info(f"Rank {rank_distrib()}: Starting training")
+        logging.info(f"Callbacks: {self.learner.cbs}")
+
+        with self.learner.distrib_ctx():
+            self.learner.fit_one_cycle(self.train_params["epochs"], cbs=self._callbacks())
+        
+        if rank_distrib() == 0:
+            model_path = self._save()
+            return model_path
+        else:
+            return None
 
     def _save(self):
         """

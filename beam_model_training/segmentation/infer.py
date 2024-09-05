@@ -21,8 +21,6 @@ from shapely.geometry import Polygon, box, MultiPolygon
 from shapely.affinity import rotate
 from scipy import ndimage
 from scipy.ndimage import median_filter
-from skimage.segmentation import watershed
-from skimage.feature import peak_local_max
 from skimage.morphology import remove_small_objects, remove_small_holes
 from tqdm import tqdm
 
