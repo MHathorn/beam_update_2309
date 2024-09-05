@@ -1,0 +1,29 @@
+name: beam_multigpu
+channels:
+  - pytorch
+  - fastai
+  - nvidia
+  - nvidia/label/cuda-11.8.0
+  - conda-forge
+dependencies:
+  - python
+  - numpy
+  - pytorch
+  - pytorch-cuda=11.8
+  - fastai
+  - accelerate
+  - tensorboard
+  - colorlog
+  - geopandas
+  - fastapi
+  - jupyterlab
+  - uvicorn
+  - rasterio
+  - rioxarray
+  - ipython
+  - opencv
+  - natsort
+  - pillow
+  - pytest
+  - pip
+
