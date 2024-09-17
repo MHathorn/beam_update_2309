@@ -195,10 +195,12 @@ class Evaluator(BaseClass):
                 gt_mask = rxr.open_rasterio(
                     groundtruth_path, default_name=groundtruth_path.name
                 )
-                gt_gdf = self.map_generator.create_shp_from_mask(gt_mask)
-                gt_values = (
-                    (gt_mask / 255).astype(int).values
-                )  # Convert to binary (0 and 1)
+                # Extract only the building class from the ground truth
+                gt_building_mask = (gt_mask.sel(band=1) == 255).astype(int)
+                
+                gt_gdf = self.map_generator.create_shp_from_mask(gt_building_mask)
+                gt_values = gt_building_mask.values
+
 
                 # Load predicted mask
                 pred_mask = rxr.open_rasterio(
@@ -236,6 +238,10 @@ class Evaluator(BaseClass):
             iou = sum_intersect / sum_union
             building_precision = buildings_intersect / buildings_total_pred
             building_recall = buildings_intersect / buildings_total_truth
+            # Get edge-guided segmentation parameters
+            edge_guided_params = self.config.get('edge_guided_segmentation', {})
+            building_threshold = edge_guided_params.get('building_threshold', 'N/A')
+            edge_threshold = edge_guided_params.get('edge_threshold', 'N/A')
 
             # Create a DataFrame with the aggregated metrics
             metrics = {
@@ -250,6 +256,8 @@ class Evaluator(BaseClass):
                     round(building_precision, 3)
                 ],
                 f"Building Recall @ {iou_threshold} IoU": [round(building_recall, 3)],
+                "Building Threshold": [building_threshold],
+                "Edge Threshold": [edge_threshold]
             }
             return pd.DataFrame(metrics)
         else:

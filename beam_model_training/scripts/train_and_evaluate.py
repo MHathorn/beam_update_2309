@@ -16,13 +16,21 @@ def main(args):
     os.environ["OMP_NUM_THREADS"] = "1"
     ssl._create_default_https_context = ssl._create_unverified_context
 
-    trainer = Trainer(args.project_dir, args.config_name)
-    model_path = trainer.run()
+    if args.eval_only:
+        evaluator = Evaluator(
+            args.project_dir, args.config_name, generate_preds=True
+        )
+        # The model_version will be read from the config file in the Evaluator's initialization
+        evaluator.evaluate(n_images=args.n_images)
 
-    evaluator = Evaluator(
-        args.project_dir, args.config_name, model_path=model_path, generate_preds=True
-    )
-    evaluator.evaluate(n_images=args.n_images)
+    else:
+        trainer = Trainer(args.project_dir, args.config_name)
+        model_path = trainer.run()
+
+        evaluator = Evaluator(
+            args.project_dir, args.config_name, model_path=model_path, generate_preds=True
+        )
+        evaluator.evaluate(n_images=args.n_images)
 
 
 if __name__ == "__main__":
@@ -48,6 +56,13 @@ if __name__ == "__main__":
         type=int,
         default=10,
         help="The number of images of tiles with detections to generate during evaluation.",
+    )
+
+    # Optional argument: Evaluate only
+    parser.add_argument(
+        "--eval_only",
+        action="store_true",
+        help="Run in evaluation-only mode using a saved model.",
     )
 
     args = parser.parse_args()

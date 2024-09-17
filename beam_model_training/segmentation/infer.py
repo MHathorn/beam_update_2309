@@ -558,8 +558,8 @@ class MapGenerator(BaseClass):
         viz_path = self.predictions_dir / f"{image_file.stem}_visualizations.png"
         rgb_image = tile.data.transpose(1, 2, 0)  # Convert to HWC format for visualization
         self.save_threshold_visualizations(rgb_image, building_prob, edge_prob, 
-                                   initial_mask, building_mask,  # Note the addition of initial_mask here
-                                   self.building_threshold, self.edge_threshold, viz_path)
+                                   building_mask, 
+                                   viz_path)
 
 
         # Generate shapefile
@@ -580,72 +580,57 @@ class MapGenerator(BaseClass):
                                 morph_kernel_size=3):
         
         if edge_prob is None:
-            return (building_prob > building_threshold).astype(np.uint8)
-        # Create edge mask
-        edge_mask = (edge_prob > edge_threshold).astype(np.uint8)
+            combined_prob = building_prob
+        else:
+            # Combine probabilities 
+            combined_prob = building_prob * (1 - 0.5 * edge_prob)
         
-        # Create building mask
-        building_mask = (building_prob > building_threshold).astype(np.uint8)
+        # Apply morphological operations on the probability map
+     #   kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (morph_kernel_size, morph_kernel_size))
         
-        # Combine edge and building information
-        combined_mask = (1 - edge_mask) * building_mask
+        # Opening (erosion followed by dilation)
+      #  opened_prob = cv2.morphologyEx(combined_prob, cv2.MORPH_OPEN, kernel)
         
-        # Remove small objects
-        cleaned_mask = remove_small_objects(combined_mask.astype(bool), min_size=min_building_size)
+        # Closing (dilation followed by erosion)
+      #  closed_prob = cv2.morphologyEx(opened_prob, cv2.MORPH_CLOSE, kernel)
         
-        # Convert back to uint8
-        cleaned_mask = cleaned_mask.astype(np.uint8)
+        # Apply median filter
+        smoothed_prob = median_filter(combined_prob, size=3)
         
-        # Create kernel for morphological operations
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (morph_kernel_size, morph_kernel_size))
+        # Final thresholding
+        binary_mask = (smoothed_prob > building_threshold).astype(np.uint8)
         
-        # Perform morphological closing to close small gaps
-        closed_mask = cv2.morphologyEx(cleaned_mask, cv2.MORPH_CLOSE, kernel)
+        # Remove small objects and fill small holes
+        cleaned_mask = remove_small_objects(binary_mask.astype(bool), min_size=min_building_size)
+        filled_mask = remove_small_holes(cleaned_mask, area_threshold=max_hole_size)
         
-        # Perform morphological opening to remove small protrusions
-        opened_mask = cv2.morphologyEx(closed_mask, cv2.MORPH_OPEN, kernel)
-        
-        # Fill small holes
-        filled_mask = remove_small_holes(opened_mask.astype(bool), area_threshold=max_hole_size)
-        
-        # Final erosion to tighten boundaries
-        #eroded_mask = cv2.erode(filled_mask.astype(np.uint8), kernel, iterations=1)
-        
-        return filled_mask
+        return filled_mask.astype(np.uint8)
 
-    def save_threshold_visualizations(self, rgb_image, building_prob, edge_prob, initial_mask, final_mask, 
-                                    building_threshold, edge_threshold, output_path):
-        fig, axs = plt.subplots(3, 2, figsize=(12, 18))
+    def save_threshold_visualizations(self, rgb_image, building_prob, edge_prob, final_mask, output_path):
+        fig, axs = plt.subplots(2, 2, figsize=(12, 12))
         
-        # Original RGB image
+        # 1. RGB image
         axs[0, 0].imshow(rgb_image)
-        axs[0, 0].set_title('Original RGB Image')
+        axs[0, 0].set_title('RGB Image')
         axs[0, 0].axis('off')
         
-        # Initial combined mask
-        axs[0, 1].imshow(initial_mask, cmap='binary')
-        axs[0, 1].set_title('Initial Combined Mask')
+        # 2. Building probability
+        axs[0, 1].imshow(building_prob, cmap='viridis')
+        axs[0, 1].set_title('Building Probability')
         axs[0, 1].axis('off')
         
-        # Building probability
-        axs[1, 0].imshow(building_prob, cmap='viridis')
-        axs[1, 0].set_title('Building Probability')
+        # 3. Edge probability
+        if edge_prob is not None:
+            axs[1, 0].imshow(edge_prob, cmap='viridis')
+            axs[1, 0].set_title('Edge Probability')
+        else:
+            axs[1, 0].set_title('Edge Probability (Not Used)')
         axs[1, 0].axis('off')
         
-        # Edge probability
-        axs[1, 1].imshow(edge_prob, cmap='viridis')
-        axs[1, 1].set_title('Edge Probability')
+        # 4. Final cleaned mask
+        axs[1, 1].imshow(final_mask, cmap='binary')
+        axs[1, 1].set_title('Final Cleaned Mask')
         axs[1, 1].axis('off')
-        
-        # Thresholded building mask
-        axs[2, 0].imshow(building_prob > building_threshold, cmap='binary')
-        axs[2, 0].set_title(f'Building Mask (threshold={building_threshold})')
-        axs[2, 0].axis('off')
-        
-        # Final cleaned mask
-        axs[2, 1].imshow(final_mask, cmap='binary')
-        axs[2, 1].set_title('Final Cleaned Mask')
-        axs[2, 1].axis('off')
         
         plt.tight_layout()
         plt.savefig(output_path, dpi=300, bbox_inches='tight')

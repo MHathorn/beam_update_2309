@@ -282,15 +282,16 @@ class Trainer(BaseClass):
                 do_flip=True,
                 flip_vert=True,
                 max_rotate=40.0,
-                min_zoom=1.0,
-                max_zoom=1.4,
-                max_warp=0.4,
+                min_zoom=0.9,
+                max_zoom=1.6,
+                max_warp=0.1,
             ),
             Normalize.from_stats(*imagenet_stats),
             Brightness(max_lighting=0.5),
             Contrast(max_lighting=0.5),
-            Hue(max_hue=0.2),
+            Hue(max_hue=0.1),
             Saturation(max_lighting=0.5),
+            RandomErasing(p=0.5, sh=0.1, min_aspect=0.3, max_count=1)
         ]
         # if self.params["distance_weighting"]:
         #     self.train_params["loss_function"] = "WeightedCrossCombinedLoss"
