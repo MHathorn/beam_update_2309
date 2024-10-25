@@ -6,6 +6,11 @@
 **/tests/**/predict
 **/tests/**/eval
 
+# Checkpoints and logging
+
+**/checkpoints
+**/lightning_logs
+
 *.pkl
 *.tar.gz
 

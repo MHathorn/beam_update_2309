@@ -1,16 +1,18 @@
-name: beam
+name: beam-lightning
 channels:
   - pytorch
   - fastai
   - nvidia
-  - nvidia/label/cuda-11.7.1
   - conda-forge
 dependencies:
-  - python=3.11
-  - numpy=1.23.5 # numpy <1.24 required for semtorch
-  - pytorch=1.13.1
-  - pytorch-cuda=11.7
-  - fastai=2.7
+  - python
+  - numpy 
+  - pytorch
+  - pytorch-cuda=11.8
+  - lightning
+  - segmentation-models-pytorch
+  - torchgeo
+  - albumentations
   - tensorboard
   - colorlog
   - geopandas
@@ -25,5 +27,4 @@ dependencies:
   - pillow
   - pytest
   - pip
-  - pip:
-      - semtorch
+
