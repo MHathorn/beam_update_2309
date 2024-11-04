@@ -19,6 +19,7 @@ from pyproj import CRS
 from rioxarray.merge import merge_arrays
 from shapely.geometry import Polygon, box, MultiPolygon
 from shapely.affinity import rotate
+from shapely.validation import explain_validity
 from scipy import ndimage
 from scipy.ndimage import median_filter
 from skimage.segmentation import watershed
@@ -136,7 +137,19 @@ class MapGenerator(BaseClass):
         """
         Load regularization parameters.
         """
-        regularization_keys = ["simplify_tolerance", "buffer_distance", "use_mbr", "mbr_threshold", "min_building_area", "max_building_area"]
+        regularization_keys = [
+            "simplify_tolerance", 
+            "buffer_distance", 
+            "use_mbr", 
+            "mbr_threshold", 
+            "min_building_area", 
+            "max_building_area",
+            "angle_tolerance",
+            "min_edge_length",
+            "orthogonal_threshold",
+            "dominant_angle_count",
+            "edge_snap_threshold",
+            "smooth_iterations"]
         self.regularization_params = {k: self.config.get("regularization", {}).get(k) for k in regularization_keys}
         
         # Set default values if not provided
@@ -146,7 +159,13 @@ class MapGenerator(BaseClass):
             "use_mbr": True,
             "mbr_threshold": 0.85,
             "min_building_area": 2,
-            "max_building_area": 30000
+            "max_building_area": 30000,
+            "angle_tolerance": 10.0,
+            "min_edge_length": 2.0,
+            "orthogonal_threshold": 15.0,
+            "dominant_angle_count": 2,
+            "edge_snap_threshold": 1.0,
+            "smooth_iterations": 1            
         }
         
         for k, v in defaults.items():
@@ -168,6 +187,38 @@ class MapGenerator(BaseClass):
             return img.rio.crs
         else:
             logging.warning("CRS could not be set at initialization.")
+
+    def _validate_polygon(self, poly, idx):
+        """
+        Validate a polygon with detailed logging.
+        
+        Returns:
+        - (bool, str): (is_valid, reason_if_invalid)
+        """
+        if poly is None:
+            return False, "Polygon is None"
+            
+        try:
+            if not isinstance(poly, (Polygon, MultiPolygon)):
+                return False, f"Not a polygon type: {type(poly)}"
+                
+            if poly.is_empty:
+                return False, "Polygon is empty"
+                
+            if not poly.is_valid:
+                reason = explain_validity(poly)
+                return False, f"Invalid geometry: {reason}"
+                
+            if len(poly.exterior.coords) <= 3:
+                return False, "Too few coordinates"
+                
+            if poly.area == 0:
+                return False, "Zero area"
+                
+            return True, "Valid"
+            
+        except Exception as e:
+            return False, f"Validation error: {str(e)}"
 
     def create_shp_from_mask(self, mask_da):
         """
@@ -194,74 +245,405 @@ class MapGenerator(BaseClass):
         if mask_da.rio.crs is None:
             raise ValueError("mask_array does not have a CRS attached.")
 
-        # Dilate the mask with a 3x3 square kernel. This is the inverse of the erosion applied in preprocessing
-        # if self.erosion:
-        #     kernel = np.ones((3, 3), np.uint8)
-        #     if len(mask_da.values.shape) > 2:
-        #         mask_da = mask_da.squeeze(dim=None)
-        #     mask_da.values = cv2.dilate(mask_da.values, kernel, iterations=1)
-
-        # Extract all connected component and turn to polygons
-        
+        # Extract polygons
         mask_values = mask_da.values
         filtered_mask = self.apply_median_filter_to_labels(mask_values, size=3)
-        shapes = rasterio.features.shapes(
-            filtered_mask.astype(np.uint8), transform=mask_da.rio.transform()
-        )
-        polygons = [Polygon(shape[0]["coordinates"][0]) for shape in shapes]
+        
+        transform = mask_da.rio.transform()
+        polygons = self._extract_precise_polygons(filtered_mask, transform)
+        
         if not polygons:
-            logging.warning("No polygons found in the mask.")
-        gdf = gpd.GeoDataFrame(crs=self.crs, geometry=polygons)
-
-        # Project to an equal area projection for regularization
-        if gdf.crs.is_geographic:
-            gdf_projected = gdf.to_crs({'proj':'cea'})
-        else:
-            gdf_projected = gdf
-
-        regularized_polygons = []
-        for idx, poly in tqdm(enumerate(gdf_projected.geometry), desc="Regularizing polygons", total=len(gdf_projected)):
-            if poly.is_valid and not poly.is_empty and len(poly.exterior.coords) > 3:
-                dominant_angle = self._calculate_dominant_angle(poly)
-                rotated = rotate(poly, -dominant_angle, origin='centroid')
-                regularized = self.regularize_polygon(rotated, 
-                                                    simplify_tolerance=0.5, 
-                                                    buffer_distance=0.1, 
-                                                    use_mbr=True, 
-                                                    mbr_threshold=0.6)
-                regularized_rotated = rotate(regularized, dominant_angle, origin='centroid')
-                regularized_polygons.append(regularized_rotated)
-            else:
-                regularized_polygons.append(poly)
-
-        gdf_projected['geometry'] = regularized_polygons
-
-        # Project back to original CRS if necessary
-        if gdf.crs.is_geographic:
-            gdf = gdf_projected.to_crs(self.crs)
-        else:
-            gdf = gdf_projected
-
-
-
-        # Calculate areas
-        gdf = self._calculate_area(gdf)
-
-        if len(gdf) > 1:
-            max_area_idx = gdf["bldg_area"].idxmax()
-            gdf = gdf.drop(max_area_idx)        
-
-        # Filter by area
-        gdf = gdf[(gdf["bldg_area"] > self.min_building_area) & (gdf["bldg_area"] < self.max_building_area)]
-
-        # in case the geo-dataframe is empty which means no settlement buildings are detected
-        if gdf.empty:
-            logging.warning("Filtered GeoDataFrame is empty after dropping small/large areas.")
+            logging.warning(f"[{mask_da.name}] No valid polygons extracted")
             return gpd.GeoDataFrame(geometry=[])
 
+        # Create GeoDataFrame
+        gdf = gpd.GeoDataFrame(geometry=polygons, crs=mask_da.rio.crs)
+        
+        # Project to local UTM zone
+        if gdf.crs.is_geographic:
+            try:
+                # Get UTM zone from center coordinates
+                center_lon = gdf.geometry.centroid.x.mean()
+                center_lat = gdf.geometry.centroid.y.mean()
+                utm_zone = int((center_lon + 180) / 6) + 1
+                utm_crs = f"+proj=utm +zone={utm_zone} +datum=WGS84"
+                if center_lat < 0:
+                    utm_crs += " +south"
+                
+                gdf_projected = gdf.to_crs(utm_crs)
+                
+                # Recalculate areas after projection
+                gdf_projected['area'] = gdf_projected.geometry.area
+                
+                logging.info(f"[{mask_da.name}] Area statistics in UTM zone {utm_zone}:")
+                logging.info(f"  - Mean area: {gdf_projected['area'].mean():.2f} sq meters")
+                logging.info(f"  - Area range: [{gdf_projected['area'].min():.2f}, {gdf_projected['area'].max():.2f}] sq meters")
+                
+                # Filter by area thresholds (in square meters)
+                min_area = 2  # 2 square meters
+                max_area = 3000  # 3000 square meters
+                gdf_projected = gdf_projected[
+                    (gdf_projected['area'] >= min_area) & 
+                    (gdf_projected['area'] <= max_area)
+                ]
+                
+                if not gdf_projected.empty:
+                    # Project back to original CRS
+                    gdf_final = gdf_projected.to_crs(mask_da.rio.crs)
+                    return gdf_final
+                else:
+                    logging.warning(f"[{mask_da.name}] No polygons within area thresholds")
+                    return gpd.GeoDataFrame(geometry=[])
+                    
+            except Exception as e:
+                logging.error(f"[{mask_da.name}] Projection/area calculation failed: {str(e)}")
+                return gpd.GeoDataFrame(geometry=[])
+        
         return gdf
 
-   
+    def _extract_precise_polygons(self, mask, transform):
+        """Enhanced polygon extraction optimized for tiles."""
+        from skimage import measure
+        
+        # Ensure mask is 2D
+        if mask.ndim > 2:
+            mask = mask.squeeze()
+        
+        # Log mask properties
+        logging.info(f"Mask properties: shape={mask.shape}, dtype={mask.dtype}, range=[{mask.min()}, {mask.max()}]")
+        
+        if mask.shape[0] < 2 or mask.shape[1] < 2:
+            logging.error(f"Mask shape {mask.shape} is too small for contour extraction")
+            return []
+        
+        # Extract contours
+        contours = measure.find_contours(
+            mask, 
+            level=0.5, 
+            fully_connected='high'
+        )
+        
+        logging.info(f"Found {len(contours)} contours")
+        
+        polygons = []
+        contour_stats = defaultdict(int)
+        
+        # Calculate pixel area thresholds
+        min_pixels = 10  # Minimum 10 pixels
+        max_pixels = (mask.shape[0] * mask.shape[1]) // 4  # Maximum 1/4 of tile
+        
+        for i, contour in enumerate(contours):
+            try:
+                if len(contour) < 4:
+                    contour_stats['too_few_points'] += 1
+                    continue
+                    
+                # Convert to pixel coordinates first
+                pixel_coords = []
+                for y, x in contour:
+                    pixel_coords.append((x, y))
+                    
+                # Close the polygon in pixel space
+                if pixel_coords[0] != pixel_coords[-1]:
+                    pixel_coords.append(pixel_coords[0])
+                
+                # Create polygon in pixel space to check area
+                pixel_poly = Polygon(pixel_coords)
+                pixel_count = pixel_poly.area  # Area in pixel space
+                
+                if min_pixels <= pixel_count <= max_pixels:
+                    # Convert to world coordinates
+                    world_coords = []
+                    for x, y in pixel_coords:
+                        real_x, real_y = transform * (x, y)
+                        world_coords.append((real_x, real_y))
+                    
+                    try:
+                        poly = Polygon(world_coords)
+                        if not poly.is_valid:
+                            cleaned = poly.buffer(0)
+                            if cleaned.is_valid and not cleaned.is_empty:
+                                poly = cleaned
+                                contour_stats['cleaned_invalid'] += 1
+                        
+                        if poly.is_valid and not poly.is_empty:
+                            # Try regularization with logging
+                            try:
+                                regularized = self._regularize_polygon(poly, force_rectangle=False)
+                                if regularized and regularized.is_valid:
+                                    original_area = poly.area
+                                    regularized_area = regularized.area
+                                    area_change = (regularized_area - original_area) / original_area * 100
+                                    
+                                    original_points = len(poly.exterior.coords)
+                                    regularized_points = len(regularized.exterior.coords)
+                                    
+                                    logging.debug(f"Regularization metrics for polygon {i}:")
+                                    logging.debug(f"  - Points: {original_points} -> {regularized_points}")
+                                    logging.debug(f"  - Area change: {area_change:.1f}%")
+                                    
+                                    if abs(area_change) > 20:  # More than 20% area change
+                                        logging.debug("  - Using original (area change too large)")
+                                        polygons.append(poly)
+                                        contour_stats['kept_original_area'] += 1
+                                    else:
+                                        polygons.append(regularized)
+                                        contour_stats['successfully_regularized'] += 1
+                                else:
+                                    polygons.append(poly)
+                                    contour_stats['regularization_failed'] += 1
+                            except Exception as e:
+                                logging.debug(f"Regularization failed for polygon {i}: {str(e)}")
+                                polygons.append(poly)
+                                contour_stats['regularization_error'] += 1
+                        else:
+                            contour_stats['invalid_polygon'] += 1
+                    except Exception as e:
+                        contour_stats[f'polygon_creation_error_{type(e).__name__}'] += 1
+                else:
+                    contour_stats['invalid_pixel_area'] += 1
+                    
+            except Exception as e:
+                contour_stats[f'contour_processing_error_{type(e).__name__}'] += 1
+                
+        logging.info("Contour processing statistics:")
+        for stat, count in contour_stats.items():
+            logging.info(f"  - {stat}: {count}")
+                        
+        return polygons
+
+    def _regularize_polygon(self, polygon, force_rectangle=False):
+        """
+        Regularize a polygon using multiple techniques.
+        
+        Args:
+            polygon: Input shapely polygon
+            force_rectangle: Whether to force rectangular shape (default: False)
+        
+        Returns:
+            Regularized polygon or None if regularization fails
+        """
+        try:
+            if not polygon.is_valid or polygon.is_empty:
+                return None
+                
+            # 1. Initial simplification to remove noise
+            simplified = polygon.simplify(tolerance=0.5, preserve_topology=True)
+            if not simplified.is_valid:
+                return polygon
+                
+            # 2. Calculate dominant angles
+            coords = np.array(simplified.exterior.coords)
+            edges = np.diff(coords, axis=0)
+            angles = np.arctan2(edges[:, 1], edges[:, 0])
+            angles_deg = np.degrees(angles) % 180
+            
+            # Find dominant angles (allowing for multiple)
+            hist, bins = np.histogram(angles_deg, bins=36, range=(0, 180))
+            peaks = []
+            angle_threshold = 15  # degrees
+            
+            for i, count in enumerate(hist):
+                if count > len(angles) * 0.1:  # At least 10% of edges
+                    angle = (bins[i] + bins[i+1]) / 2
+                    peaks.append(angle)
+            
+            # 3. Align edges to dominant angles
+            aligned_coords = []
+            prev_point = None
+            
+            for i in range(len(coords) - 1):
+                current_point = coords[i]
+                next_point = coords[i + 1]
+                
+                if prev_point is not None:
+                    # Calculate edge angle
+                    edge_angle = np.degrees(np.arctan2(
+                        next_point[1] - current_point[1],
+                        next_point[0] - current_point[0]
+                    )) % 180
+                    
+                    # Find closest dominant angle
+                    closest_peak = None
+                    min_diff = angle_threshold
+                    
+                    for peak in peaks:
+                        diff = abs((edge_angle - peak + 90) % 180 - 90)
+                        if diff < min_diff:
+                            min_diff = diff
+                            closest_peak = peak
+                    
+                    if closest_peak is not None:
+                        # Align edge to dominant angle
+                        angle_rad = np.radians(closest_peak)
+                        edge_length = np.sqrt(
+                            (next_point[0] - current_point[0])**2 +
+                            (next_point[1] - current_point[1])**2
+                        )
+                        
+                        new_point = (
+                            current_point[0] + edge_length * np.cos(angle_rad),
+                            current_point[1] + edge_length * np.sin(angle_rad)
+                        )
+                        aligned_coords.append(new_point)
+                    else:
+                        aligned_coords.append(tuple(current_point))
+                else:
+                    aligned_coords.append(tuple(current_point))
+                    
+                prev_point = current_point
+                
+            # Close the polygon
+            aligned_coords.append(aligned_coords[0])
+            
+            # 4. Create aligned polygon
+            try:
+                aligned = Polygon(aligned_coords)
+                if aligned.is_valid and not aligned.is_empty:
+                    # 5. Optional rectangle conversion
+                    if force_rectangle:
+                        rect = aligned.minimum_rotated_rectangle
+                        if rect.is_valid and not rect.is_empty:
+                            # Only use rectangle if it's similar enough to original
+                            if rect.area / aligned.area < 1.2:  # Within 20% area difference
+                                return rect
+                    return aligned
+            except Exception as e:
+                logging.debug(f"Failed to create aligned polygon: {str(e)}")
+            
+            # Fallback to simplified version if alignment fails
+            return simplified if simplified.is_valid else polygon
+            
+        except Exception as e:
+            logging.debug(f"Regularization failed: {str(e)}")
+            return polygon  # Return original polygon if regularization fails
+
+
+
+    def _advanced_regularization(self, polygon):
+        """Enhanced regularization with better error handling"""
+        try:
+            if isinstance(polygon, MultiPolygon):
+                return MultiPolygon([
+                    self._advanced_regularization(p) for p in polygon.geoms
+                    if p.is_valid and not p.is_empty
+                ])
+                
+            if not polygon.is_valid or polygon.is_empty:
+                return None
+                
+            # Calculate dominant angles
+            dominant_angles = self._calculate_dominant_angles(polygon)
+            
+            # Log original geometry properties
+            logging.debug(f"Original geometry - Area: {polygon.area:.2f}, Points: {len(polygon.exterior.coords)}")
+            
+            # Rotate to align with dominant angle
+            main_angle = dominant_angles[0] if dominant_angles else 0
+            try:
+                rotated = rotate(polygon, -main_angle, origin='centroid')
+                if not rotated.is_valid:
+                    logging.debug("Rotation produced invalid geometry")
+                    return None
+            except Exception as e:
+                logging.debug(f"Rotation failed: {str(e)}")
+                return None
+                
+            # Enhanced regularization
+            try:
+                regularized = self._regularize_orthogonal(rotated)
+                if not regularized.is_valid:
+                    logging.debug("Orthogonal regularization produced invalid geometry")
+                    return None
+            except Exception as e:
+                logging.debug(f"Orthogonal regularization failed: {str(e)}")
+                return None
+                
+            # Rotate back
+            try:
+                final = rotate(regularized, main_angle, origin='centroid')
+                if not final.is_valid:
+                    logging.debug("Final rotation produced invalid geometry")
+                    return None
+            except Exception as e:
+                logging.debug(f"Final rotation failed: {str(e)}")
+                return None
+                
+            # Verify final geometry
+            if final.is_valid and final.area > 0:
+                return final
+            return None
+            
+        except Exception as e:
+            logging.debug(f"Advanced regularization failed: {str(e)}")
+            return None
+
+    def _calculate_dominant_angles(self, polygon):
+        """Calculate multiple dominant angles in the polygon."""
+        coords = np.array(polygon.exterior.coords)
+        edges = np.diff(coords, axis=0)
+        
+        # Calculate angles of all edges longer than min_edge_length
+        edge_lengths = np.sqrt(np.sum(edges**2, axis=1))
+        valid_edges = edges[edge_lengths > self.min_edge_length]
+        
+        if len(valid_edges) == 0:
+            return [0]  # Return default angle if no valid edges
+            
+        angles = np.arctan2(valid_edges[:, 1], valid_edges[:, 0])
+        angles = np.degrees(angles) % 180
+        
+        # Create histogram of angles
+        hist, bins = np.histogram(angles, bins=36, range=(0, 180))
+        
+        # Find peaks in histogram
+        from scipy.signal import find_peaks
+        peaks, _ = find_peaks(hist, height=max(hist)/4)
+        
+        dominant_angles = bins[peaks]
+        
+        # Sort by prominence and take top N angles
+        angle_counts = [(angle, hist[peak]) for angle, peak in zip(dominant_angles, peaks)]
+        angle_counts.sort(key=lambda x: x[1], reverse=True)
+        
+        return [angle for angle, _ in angle_counts[:self.dominant_angle_count]]
+
+    def _regularize_orthogonal(self, polygon):
+        """Regularize assuming roughly orthogonal angles."""
+        coords = np.array(polygon.exterior.coords)
+        new_coords = []
+        
+        for i in range(len(coords) - 1):
+            p1 = coords[i]
+            p2 = coords[i + 1]
+            
+            # Calculate edge angle
+            angle = np.arctan2(p2[1] - p1[1], p2[0] - p1[0])
+            angle_deg = np.degrees(angle) % 90
+            
+            # Snap to nearest 90 degree increment if within threshold
+            if angle_deg < self.orthogonal_threshold or \
+            angle_deg > (90 - self.orthogonal_threshold):
+                if angle_deg < 45:
+                    p2 = np.array([p2[0], p1[1]])
+                else:
+                    p2 = np.array([p1[0], p2[1]])
+            
+            new_coords.append(p1)
+            
+            # Snap nearby vertices
+            if len(new_coords) > 1:
+                prev = np.array(new_coords[-2])
+                curr = np.array(new_coords[-1])
+                if np.linalg.norm(prev - curr) < self.edge_snap_threshold:
+                    new_coords[-1] = tuple(prev)  # Snap to previous point
+        
+        new_coords.append(new_coords[0])  # Close the polygon
+        
+        try:
+            return Polygon(new_coords)
+        except:
+            return polygon
 
     def apply_median_filter_to_labels(self, labeled_mask, size=3):
         unique_labels = np.unique(labeled_mask)
