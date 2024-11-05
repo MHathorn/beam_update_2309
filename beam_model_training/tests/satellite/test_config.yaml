@@ -7,4 +7,18 @@ tiling:
   erosion: true
   tile_size: 256
 # MODEL SETTINGS
-training: true
+augmentation:
+  rotate_limit: 45
+  scale_limit: 0.2
+  brightness_limit: 0.2
+  contrast_limit: 0.2
+  noise_std: 0.02
+  noise_prob: 0.3
+  weather_prob: 0.2
+
+train:
+  architecture: "u-net"
+  backbone: "resnet18"
+  epochs: 10
+  learning_rate: 0.001
+  batch_size: 8

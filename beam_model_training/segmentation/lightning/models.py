@@ -17,6 +17,7 @@ class BuildingSegmentationModule(pl.LightningModule):
         self.save_hyperparameters(ignore=['model'])
         
         # Load training parameters from config
+        self.batch_size = config.get('batch_size', 32)
         self.train_params = config.get('train', {})
         self.learning_rate = self.train_params.get('learning_rate', 1e-3)
         self.max_epochs = self.train_params.get('epochs', 100)
@@ -57,11 +58,11 @@ class BuildingSegmentationModule(pl.LightningModule):
         recall = self.train_recall(preds, y)
         
         # Log metrics
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
-        self.log('train_dice', dice_score, on_step=True, on_epoch=True, prog_bar=True)
-        self.log('train_iou', iou_score, on_step=True, on_epoch=True)
-        self.log('train_precision', precision, on_step=True, on_epoch=True)
-        self.log('train_recall', recall, on_step=True, on_epoch=True)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, batch_size=self.batch_size, sync_dist=True)
+        self.log('train_dice', dice_score, on_step=True, on_epoch=True, prog_bar=True, batch_size=self.batch_size, sync_dist=True)
+        self.log('train_iou', iou_score, on_step=True, on_epoch=True, batch_size=self.batch_size, sync_dist=True)
+        self.log('train_precision', precision, on_step=True, on_epoch=True, batch_size=self.batch_size, sync_dist=True)
+        self.log('train_recall', recall, on_step=True, on_epoch=True, batch_size=self.batch_size, sync_dist=True)
         
         return loss
 
@@ -84,11 +85,11 @@ class BuildingSegmentationModule(pl.LightningModule):
         recall = self.val_recall(preds, y)
         
         # Log metrics
-        self.log('val_loss', val_loss, on_epoch=True, prog_bar=True)
-        self.log('val_dice', dice_score, on_epoch=True, prog_bar=True)
-        self.log('val_iou', iou_score, on_epoch=True)
-        self.log('val_precision', precision, on_epoch=True)
-        self.log('val_recall', recall, on_epoch=True)
+        self.log('val_loss', val_loss, on_epoch=True, prog_bar=True, batch_size=self.batch_size, sync_dist=True)
+        self.log('val_dice', dice_score, on_epoch=True, prog_bar=True, batch_size=self.batch_size, sync_dist=True)  
+        self.log('val_iou', iou_score, on_epoch=True, batch_size=self.batch_size, sync_dist=True)
+        self.log('val_precision', precision, on_epoch=True, batch_size=self.batch_size, sync_dist=True)
+        self.log('val_recall', recall, on_epoch=True, batch_size=self.batch_size, sync_dist=True)
 
     def configure_optimizers(self):
         """Configure optimizers and learning rate schedulers."""

@@ -83,10 +83,20 @@ def test_lightning_setup(project_dir: Path, config_path: Path):
     trainer = pl.Trainer(
         max_epochs=1,
         accelerator='auto',
-        devices=1,
-        max_steps=5,  # Only run a few steps for testing
+        devices='auto',
+        strategy='ddp',
+        max_steps=5,
         enable_progress_bar=True,
-        logger=False  # Disable logging for testing
+        logger=False,
+        callbacks=[
+            pl.callbacks.ModelCheckpoint(
+                dirpath='checkpoints',
+                filename='{epoch}-{val_loss:.2f}',
+                save_top_k=3,
+                mode='min',
+                monitor='val_loss'
+            )
+        ]
     )
     
     logging.info("Starting test training loop...")

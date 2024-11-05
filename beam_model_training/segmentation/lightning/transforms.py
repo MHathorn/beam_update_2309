@@ -1,38 +1,60 @@
-import torch
-import torchvision.transforms.functional as TF
-from typing import Dict, Tuple, Union
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+from typing import List, Optional
 
-class BuildingSegmentationTransform:
-    """Base class for building segmentation transforms."""
-    def __call__(self, image: torch.Tensor, mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Apply the transform to both image and mask.
+def get_training_augmentations(
+    tile_size: int = 256,
+    rotate_limit: int = 45,
+    scale_limit: float = 0.2,
+    brightness_limit: float = 0.2,
+    contrast_limit: float = 0.2
+) -> A.Compose:
+    """Get the default training augmentation pipeline using albumentations."""
+    return A.Compose([
+        # Spatial augmentations
+        A.RandomRotate90(p=0.5),
+        A.Flip(p=0.5),
+        A.ShiftScaleRotate(
+            shift_limit=0.0625, 
+            scale_limit=scale_limit, 
+            rotate_limit=rotate_limit, 
+            interpolation=1, 
+            border_mode=0,
+            value=0,
+            mask_value=0,
+            p=0.5
+        ),
         
-        Args:
-            image: Input image tensor
-            mask: Input mask tensor
-            
-        Returns:
-            Transformed image and mask tensors
-        """
-        raise NotImplementedError
+        # Color augmentations
+        A.OneOf([
+            A.RandomBrightnessContrast(
+                brightness_limit=brightness_limit,
+                contrast_limit=contrast_limit,
+                p=0.5
+            ),
+            A.RandomGamma(gamma_limit=(80, 120), p=0.5),
+            A.HueSaturationValue(
+                hue_shift_limit=20,
+                sat_shift_limit=30,
+                val_shift_limit=20,
+                p=0.5
+            ),
+        ], p=0.3),
+        
+        # Weather/Atmospheric effects
+        A.OneOf([
+            A.RandomFog(fog_coef_lower=0.1, fog_coef_upper=0.3, p=0.5),
+            A.RandomShadow(shadow_roi=(0, 0.5, 1, 1), p=0.5),
+        ], p=0.2),
+        
+        # Normalize and convert to tensor
+        A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ToTensorV2()
+    ])
 
-class Compose:
-    """Compose multiple transforms together."""
-    def __init__(self, transforms: list):
-        self.transforms = transforms
-        
-    def __call__(self, image: torch.Tensor, mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        for transform in self.transforms:
-            image, mask = transform(image, mask)
-        return image, mask
-
-class Normalize(BuildingSegmentationTransform):
-    """Normalize the image using mean and std."""
-    def __init__(self, mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225]):
-        self.mean = mean
-        self.std = std
-        
-    def __call__(self, image: torch.Tensor, mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        image = TF.normalize(image, self.mean, self.std)
-        return image, mask
+def get_validation_augmentations() -> A.Compose:
+    """Get the default validation augmentation pipeline (normalization only)."""
+    return A.Compose([
+        A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ToTensorV2()
+    ])
