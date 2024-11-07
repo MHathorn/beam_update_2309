@@ -3,10 +3,8 @@ import logging
 from pathlib import Path
 import yaml
 
-import pytorch_lightning as pl
 import torch
-import torch.nn as nn
-
+import pytorch_lightning as pl
 from segmentation.lightning.data import BuildingSegmentationDataModule
 from segmentation.lightning.models import BuildingSegmentationModule
 
@@ -14,26 +12,9 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-class SimpleCNN(nn.Module):
-    """Simple CNN for testing the Lightning setup"""
-    def __init__(self, num_classes=2):
-        super().__init__()
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(32, num_classes, kernel_size=1)
-        
-    def forward(self, x):
-        x = torch.relu(self.conv1(x))
-        x = torch.relu(self.conv2(x))
-        return self.conv3(x)
-
-def test_lightning_setup(project_dir: Path, config_path: Path):
+def train_model(project_dir: Path, config_path: Path):
     """
-    Test the Lightning infrastructure setup.
-    
-    Args:
-        project_dir: Path to the project directory
-        config_path: Path to the configuration file
+    Train the segmentation model using PyTorch Lightning.
     """
     # Load configuration
     with open(config_path) as f:
@@ -41,79 +22,73 @@ def test_lightning_setup(project_dir: Path, config_path: Path):
     
     logging.info(f"Loaded configuration from {config_path}")
     
-    # Initialize data module
+    # Initialize data module with batch size from config
     data_module = BuildingSegmentationDataModule(
         data_dir=project_dir,
         config=config,
-        batch_size=2,  # Small batch size for testing
-        num_workers=0   # No multiprocessing for testing
+        batch_size=config['train'].get('batch_size', 32),
+        num_workers=4
     )
     
     logging.info("Initializing data module...")
     data_module.setup()
     
-    # Test data loading
-    try:
-        train_loader = data_module.train_dataloader()
-        val_loader = data_module.val_dataloader()
-        
-        # Try to load a batch
-        batch = next(iter(train_loader))
-        logging.info(f"Successfully loaded a batch with keys: {batch.keys()}")
-        logging.info(f"Image shape: {batch['image'].shape}")
-        logging.info(f"Mask shape: {batch['mask'].shape}")
-        
-    except Exception as e:
-        logging.error(f"Error during data loading: {str(e)}")
-        raise
-    
-    # Initialize model
-    num_classes = len(config.get('codes', ['background', 'building']))
-    model = SimpleCNN(num_classes=num_classes)
-    
     # Initialize Lightning module
-    lightning_module = BuildingSegmentationModule(
-        model=model,
-        config=config
-    )
+    lightning_module = BuildingSegmentationModule(config=config)
+
+    steps_per_epoch = len(data_module.train_dataset) // (config['train']['batch_size'] * torch.cuda.device_count())
+    log_every_n_steps = max(1, min(steps_per_epoch // 4, 50))  # Log 4 times per epoch or every 50 steps, whichever is smaller
+
     
     logging.info("Initializing trainer...")
     
-    # Initialize trainer with minimal settings
+    # Initialize trainer
     trainer = pl.Trainer(
-        max_epochs=1,
+        max_epochs=config['train'].get('epochs', 100),
         accelerator='auto',
         devices='auto',
         strategy='ddp',
-        max_steps=5,
+        precision='16-mixed',
         enable_progress_bar=True,
-        logger=False,
+        log_every_n_steps=log_every_n_steps,
+        gradient_clip_val=1.0,
+        accumulate_grad_batches=2,
+        logger=pl.loggers.TensorBoardLogger(
+            save_dir=str(project_dir / 'lightning_logs'),
+            name='segmentation_training'
+        ),
         callbacks=[
             pl.callbacks.ModelCheckpoint(
-                dirpath='checkpoints',
-                filename='{epoch}-{val_loss:.2f}',
+                dirpath=str(project_dir / 'checkpoints'),
+                filename='{epoch}-{val_dice:.3f}',
                 save_top_k=3,
-                mode='min',
-                monitor='val_loss'
+                mode='max',
+                monitor='val_dice'
+            ),
+            pl.callbacks.LearningRateMonitor(logging_interval='step'),
+            pl.callbacks.EarlyStopping(
+                monitor='val_dice',
+                mode='max',
+                patience=10,
+                min_delta=0.001
             )
         ]
     )
     
-    logging.info("Starting test training loop...")
+    logging.info("Starting training...")
     
     try:
         trainer.fit(
             model=lightning_module,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader
+            datamodule=data_module
         )
-        logging.info("Successfully completed test training loop!")
+        logging.info("Training completed successfully!")
     except Exception as e:
         logging.error(f"Error during training: {str(e)}")
         raise
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Test Lightning infrastructure setup")
+    parser = argparse.ArgumentParser(description="Train segmentation model with Lightning")
     parser.add_argument(
         "-d",
         "--project_dir",
@@ -131,7 +106,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    test_lightning_setup(
+    train_model(
         project_dir=Path(args.project_dir),
         config_path=Path(args.config_path)
     )
