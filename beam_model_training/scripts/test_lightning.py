@@ -82,6 +82,13 @@ def train_model(project_dir: Path, config_path: Path):
             model=lightning_module,
             datamodule=data_module
         )
+        # Run final validation
+        logging.info("Running final validation...")
+        val_results = trainer.validate(
+            model=lightning_module,
+            datamodule=data_module
+        )
+        logging.info(f"Final validation results: {val_results}")
         logging.info("Training completed successfully!")
     except Exception as e:
         logging.error(f"Error during training: {str(e)}")

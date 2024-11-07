@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader, Dataset
 import albumentations as A
+import numpy as np
 import rioxarray as rxr
 
 from .transforms import get_training_augmentations, get_validation_augmentations
@@ -50,28 +51,32 @@ class BuildingSegmentationDataset(Dataset):
         image = rxr.open_rasterio(img_path).values
         mask = rxr.open_rasterio(mask_path).values
         
-        # Convert to numpy arrays in the format expected by albumentations
-        image = image.transpose(1, 2, 0)  # CHW -> HWC for albumentations
-        mask = mask[0]  # Take first band
-
+        # Convert image for albumentations (CHW -> HWC)
+        image = image.transpose(1, 2, 0)
+        
+        # Convert multi-band mask to class indices
+        mask = mask.transpose(1, 2, 0)  # CHW -> HWC
+        
+        # Create class index mask (background=0, building=1, edge=2)
+        class_mask = np.zeros(mask.shape[:2], dtype=np.int64)
+        class_mask[mask[..., 0] > 0] = 1  # Building class
+        if mask.shape[-1] > 1:  # If we have edge channel
+            class_mask[mask[..., 1] > 0] = 2  # Edge class
+        
         image = image.astype('float32')
         
-        # Ensure image values are in [0, 1]
-        if image.max() > 1.0:
-            image = image / 255.0
+
+   
             
         # Apply albumentations transforms
         if self.transform is not None:
-            transformed = self.transform(image=image, mask=mask)
-            image = transformed['image']  # Now a torch tensor
-            mask = transformed['mask']  # Now a torch tensor
-        
-        # Convert mask to binary and long dtype
-        mask = (mask > 0).long()
+            transformed = self.transform(image=image, mask=class_mask)
+            image = transformed['image']
+            class_mask = transformed['mask']
         
         return {
             'image': image,
-            'mask': mask,
+            'mask': class_mask.long(),  
             'image_path': str(img_path),
             'mask_path': str(mask_path)
         }
