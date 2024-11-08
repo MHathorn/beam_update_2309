@@ -106,17 +106,15 @@ class BuildingSegmentationModule(pl.LightningModule):
     
     def _shared_step(self, batch: Dict[str, torch.Tensor], stage: str, batch_idx: Union[int, str]) -> torch.Tensor:
         x, y = batch['image'], batch['mask']
+        batch_size = x.size(0)
         
         # Convert batch_idx to int if it's a string
         batch_idx_int = int(batch_idx)
         
         # Debug every few batches
 
-        
         y_hat = self(x)
-        
-
-        
+                
         weights = self.class_weights.to(y_hat.device) if self.class_weights is not None else None
 
         # Calculate loss
@@ -130,9 +128,9 @@ class BuildingSegmentationModule(pl.LightningModule):
         iou = getattr(self, f'{stage}_iou')(preds, y)
         
         # Log everything
-        self.log(f'{stage}_loss', loss, prog_bar=True, sync_dist=True)
-        self.log(f'{stage}_dice', dice, prog_bar=True, sync_dist=True)
-        self.log(f'{stage}_iou', iou, prog_bar=True, sync_dist=True)
+        self.log(f'{stage}_loss', loss, prog_bar=True, sync_dist=True, batch_size=batch_size)
+        self.log(f'{stage}_dice', dice, prog_bar=True, sync_dist=True, batch_size=batch_size)
+        self.log(f'{stage}_iou', iou, prog_bar=True, sync_dist=True, batch_size=batch_size)
         
         # Log images periodically
         if batch_idx_int == 0 and self.current_epoch % 5 == 0:
@@ -156,7 +154,7 @@ class BuildingSegmentationModule(pl.LightningModule):
         optimizer = torch.optim.AdamW(
             self.parameters(), 
             lr=self.learning_rate,
-            weight_decay=0.01  # Add weight decay
+            weight_decay=0.01
         )
         
         scheduler = torch.optim.lr_scheduler.OneCycleLR(
@@ -173,6 +171,10 @@ class BuildingSegmentationModule(pl.LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "interval": "step"
+                "interval": "step",
+                "frequency": 1,
+                # Add these two lines:
+                "monitor": "val_loss",  # Optional - only if you want to monitor a metric
+                "strict": False        # Optional - allows the monitor metric to be missing
             }
         }

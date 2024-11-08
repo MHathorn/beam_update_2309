@@ -118,7 +118,8 @@ class BuildingSegmentationDataModule(pl.LightningDataModule):
         
         # Set up paths based on existing directory structure
         self.train_dir = self.data_dir / 'tiles/train'
-        self.val_dir = self.data_dir / 'tiles/test'
+        self.val_dir = self.data_dir / 'tiles/val'
+        self.test_dir = self.data_dir / 'tiles/test'
         
         # Load parameters from config
         self.train_params = config.get('train', {})
@@ -145,7 +146,8 @@ class BuildingSegmentationDataModule(pl.LightningDataModule):
         
         # Set up paths based on existing directory structure
         self.train_dir = self.data_dir / 'tiles/train'
-        self.val_dir = self.data_dir / 'tiles/test'  # Using test set as validation
+        self.val_dir = self.data_dir / 'tiles/val' 
+        self.test_dir = self.data_dir / 'tiles/test'
         
         self.train_dataset: Optional[BuildingSegmentationDataset] = None
         self.val_dataset: Optional[BuildingSegmentationDataset] = None

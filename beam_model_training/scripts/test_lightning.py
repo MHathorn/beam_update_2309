@@ -61,7 +61,7 @@ def train_model(project_dir: Path, config_path: Path):
             pl.callbacks.ModelCheckpoint(
                 dirpath=str(project_dir / 'checkpoints'),
                 filename='{epoch}-{val_dice:.3f}',
-                save_top_k=3,
+                save_top_k=1,
                 mode='max',
                 monitor='val_dice'
             ),
@@ -82,9 +82,15 @@ def train_model(project_dir: Path, config_path: Path):
             model=lightning_module,
             datamodule=data_module
         )
+        val_trainer = pl.Trainer(
+            accelerator='auto',
+            devices=[0],
+            #strategy='ddp',
+            precision='16-mixed'
+        )
         # Run final validation
         logging.info("Running final validation...")
-        val_results = trainer.validate(
+        val_results = val_trainer.validate(
             model=lightning_module,
             datamodule=data_module
         )
