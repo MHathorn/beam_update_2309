@@ -10,14 +10,20 @@ import pytz
 import rioxarray as rxr
 from tqdm import tqdm
 import xarray as xr
-from fastai.vision.all import set_seed, torch, PILImage
+import random
+import torch
+from PIL import Image
+#from fastai.vision.all import set_seed, torch, PILImage
 
 
 def seed(seed_value=0):
     """Seed randomization functions for reproducibility."""
     random.seed(seed_value)
     np.random.seed(seed_value)
-    set_seed(seed_value)
+    torch.manual_seed(seed_value)  # Replaces fastai's set_seed
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed_value)
+        torch.cuda.manual_seed_all(seed_value)  # for multi-GPU
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
@@ -125,15 +131,14 @@ def multiband_to_png(file_path, output_dir):
 
 
 def get_tile_size(image_path):
-    "Get the size o a tile from an image file."
-    img = PILImage.create(image_path)
-
-    if img.shape[0] != img.shape[1]:
+    """Get the size of a tile from an image file."""
+    img = Image.open(image_path)  
+    width, height = img.size  
+    if width != height:
         raise ValueError(
-            f"Tiles should be of shape (tile_size, tile_size): {img.shape}"
+            f"Tiles should be square, got dimensions: ({width}, {height})"
         )
-
-    return img.shape[0]
+    return width  # or height, they're the same
 
 
 def copy_leaf_files(src_dir, dest_dir):

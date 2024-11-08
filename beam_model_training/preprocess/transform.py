@@ -1,5 +1,5 @@
 import logging
-from fastai.vision.all import *
+#from fastai.vision.all import *
 import shutil
 from pathlib import Path
 
@@ -41,14 +41,15 @@ def calculate_average_confidence(buildings, tile_geom):
     return buildings_in_tile["confidence"].mean()
 
 
-def gen_train_test(project_dir, test_size=0.2, seed=2022, distance_weighting=False):
+def gen_train_test(project_dir, test_size=0.2, val_size=0, seed=2022, distance_weighting=False):
     """
-    Splits image and mask files into training and testing sets based on the specified test size and seed,
+    Splits image and mask files into training and testing sets with optional validation set based on the specified test size and seed,
     and moves the testing files to separate directories.
 
     Args:
         project_dir (str or Path): The directory containing all project tiles.
         test_size (float, optional): The proportion of the dataset to include in the test split. Defaults to 0.2.
+        val_size (float, optional): The proportion of the dataset to include in the validation split. Defaults to 0.1.
         seed (int, optional): The random seed used for splitting the data. Defaults to 2022.
         distance_weighting (bool, optional): Whether to include distance weighting files in the split. Defaults to False.
 
@@ -76,15 +77,24 @@ def gen_train_test(project_dir, test_size=0.2, seed=2022, distance_weighting=Fal
         image_files, test_size=test_size, random_state=seed
     )
 
+    # Optional: split training data into train/val if val_size > 0
+    if val_size > 0:
+        train_files, val_files = train_test_split(
+            train_files, test_size=val_size, random_state=seed
+        )
+        splits = [("train", train_files), ("val", val_files), ("test", test_files)]
+    else:
+        splits = [("train", train_files), ("test", test_files)]
+
     tile_types = ["image", "mask"]
     if distance_weighting:
         tile_types.append("weight")
 
-    for dir_name, files in [("test", test_files), ("train", train_files)]:
+    for split_name, files in splits:
         for tile in tile_types:
             source_dir = project_dir / BaseClass.DIR_STRUCTURE[f"{tile}_tiles"]
             target_dir = BaseClass.create_if_not_exists(
-                project_dir / BaseClass.DIR_STRUCTURE[f"{dir_name}_{tile}s"],
+                project_dir / BaseClass.DIR_STRUCTURE[f"{split_name}_{tile}s"],
                 overwrite=True,
             )
 
@@ -101,4 +111,4 @@ def gen_train_test(project_dir, test_size=0.2, seed=2022, distance_weighting=Fal
                             f"Couldn't find corresponding {tile} file for {file_path.name}."
                         )
 
-            logging.info(f"Moved {len(files)} files to '{dir_name}_{tile}s' directory.")
+            logging.info(f"Moved {len(files)} files to '{split_name}_{tile}s' directory.")
