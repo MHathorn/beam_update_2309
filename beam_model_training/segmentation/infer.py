@@ -702,6 +702,29 @@ class MapGenerator(BaseClass):
 
         logging.info(f"Inference completed for {len(output_files)} tiles.")
         return output_files
+    
+    def _validate_boundaries(self, boundaries_gdf, primary_key):
+        """
+        Validate boundaries GeoDataFrame and primary key before processing.
+        
+        Parameters
+        ----------
+        boundaries_gdf : gpd.GeoDataFrame
+            GeoDataFrame containing settlement boundaries
+        primary_key : str
+            Column name to use as primary key
+            
+        Raises
+        ------
+        ValueError
+            If primary key is not found in boundaries_gdf columns
+        """
+        if primary_key not in boundaries_gdf.columns:
+            available_columns = ', '.join(boundaries_gdf.columns)
+            raise ValueError(
+                f"The primary_key '{primary_key}' is not present in the boundaries_gdf columns. "
+                f"Available columns are: {available_columns}"
+            )
 
     def generate_map_from_images(
         self, images_dir=None, boundaries_gdf=None, primary_key=""
@@ -729,6 +752,11 @@ class MapGenerator(BaseClass):
             raise rxr.exceptions.MissingCRS(
                 "CRS could not be set. Please provide a valid images directory for CRS assignment."
             )
+        
+        if boundaries_gdf is not None:
+            if boundaries_gdf.empty:
+                raise ValueError("The boundaries GeoDataFrame is empty.")
+            self._validate_boundaries(boundaries_gdf, primary_key)
 
         if not self.generate_preds and any(self.predictions_dir.iterdir()):
             output_files = []
