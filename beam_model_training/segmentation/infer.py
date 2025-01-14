@@ -225,10 +225,10 @@ class MapGenerator(BaseClass):
                 dominant_angle = self._calculate_dominant_angle(poly)
                 rotated = rotate(poly, -dominant_angle, origin='centroid')
                 regularized = self.regularize_polygon(rotated, 
-                                                    simplify_tolerance=0.5, 
-                                                    buffer_distance=0.1, 
-                                                    use_mbr=True, 
-                                                    mbr_threshold=0.6)
+                                    simplify_tolerance=self.simplify_tolerance,
+                                    buffer_distance=self.buffer_distance, 
+                                    use_mbr=self.use_mbr,
+                                    mbr_threshold=self.mbr_threshold)
                 regularized_rotated = rotate(regularized, dominant_angle, origin='centroid')
                 regularized_polygons.append(regularized_rotated)
             else:
@@ -359,37 +359,108 @@ class MapGenerator(BaseClass):
     def _filter_by_areas(self, output_files, boundaries_gdf, primary_key):
         """
         Filters and merges geospatial data arrays by settlement areas.
-
-        Parameters
-        ----------
-        output_files : list of xarray.DataArray
-            Geospatial data arrays with a 'name' attribute.
-        boundaries_gdf : gpd.GeoDataFrame
-            Settlement areas with geometries and attributes.
-        primary_key : str
-            Column in `boundaries_gdf` for unique settlement identification.
-
-        Returns
-        -------
-        filtered_buildings : gpd.GeoDataFrame
-            Merged and masked geospatial data for each settlement, enriched with settlement attributes.
+        Performs regularization after merging for better context awareness.
         """
-
         grouped_tiles = self._group_tiles_by_connected_area(
             output_files, boundaries_gdf, primary_key
         )
         gdfs = []
         components_list = list(grouped_tiles.items())
 
-        for (pkey, _), names in tqdm(components_list, desc="Progressing"):
-            # Filter the data arrays by name in output_files
-            settlement_tiles = [da for da in output_files if da.name in names]
+        for (pkey, _), names in tqdm(components_list, desc="Processing settlement areas"):
+            try:
+                # Merge tiles first
+                settlement_tiles = [da for da in output_files if da.name in names]
+                combined = merge_arrays(settlement_tiles)
+                combined.name = pkey
 
-            combined = merge_arrays(settlement_tiles)
-            combined.name = pkey
+                # Extract polygons without regularization
+                mask_values = combined.values
+                filtered_mask = self.apply_median_filter_to_labels(mask_values, size=3)
+                shapes = rasterio.features.shapes(
+                    filtered_mask.astype(np.uint8), 
+                    transform=combined.rio.transform()
+                )
+                polygons = [Polygon(shape[0]["coordinates"][0]) for shape in shapes]
+                
+                if not polygons:
+                    continue
+                    
+                # Create initial GeoDataFrame
+                gdf = gpd.GeoDataFrame(crs=self.crs, geometry=polygons)
+                
+                # Project to equal area for regularization
+                if gdf.crs.is_geographic:
+                    gdf_projected = gdf.to_crs({'proj':'cea'})
+                else:
+                    gdf_projected = gdf
 
-            gdf = self.create_shp_from_mask(combined)
-            gdfs.append(gdf)
+                # Find dominant angles across all buildings
+                all_angles = []
+                for poly in gdf_projected.geometry:
+                    if isinstance(poly, (Polygon, MultiPolygon)) and poly.is_valid and not poly.is_empty:
+                        try:
+                            angle = self._calculate_dominant_angle(poly)
+                            if angle is not None:
+                                all_angles.append(angle)
+                        except Exception as e:
+                            logging.warning(f"Error calculating angle: {e}")
+                            continue
+
+                # Get dominant angle if we have enough buildings
+                dominant_angle = None
+                if len(all_angles) > 3:
+                    angles_rad = np.deg2rad(all_angles)
+                    hist, bins = np.histogram(angles_rad, bins=36, range=(-np.pi, np.pi))
+                    dominant_angle = np.rad2deg(bins[np.argmax(hist)])
+
+                # Regularize using settlement context
+                regularized_polygons = []
+                for poly in gdf_projected.geometry:
+                    try:
+                        if isinstance(poly, (Polygon, MultiPolygon)) and poly.is_valid and not poly.is_empty:
+                            # Use settlement-wide dominant angle if available
+                            angle_to_use = dominant_angle if dominant_angle is not None else self._calculate_dominant_angle(poly)
+                            
+                            if angle_to_use is not None:
+                                # Rotate, regularize, and rotate back
+                                rotated = rotate(poly, -angle_to_use, origin='centroid')
+                                regularized = self.regularize_polygon(rotated)
+                                regularized_rotated = rotate(regularized, angle_to_use, origin='centroid')
+                                regularized_polygons.append(regularized_rotated)
+                            else:
+                                # If no clear angle, just regularize
+                                regularized = self.regularize_polygon(poly)
+                                regularized_polygons.append(regularized)
+                        else:
+                            regularized_polygons.append(poly)
+                    except Exception as e:
+                        logging.warning(f"Error regularizing polygon: {e}")
+                        regularized_polygons.append(poly)
+
+                gdf_projected['geometry'] = regularized_polygons
+
+                # Project back if necessary
+                if gdf.crs.is_geographic:
+                    gdf = gdf_projected.to_crs(self.crs)
+                else:
+                    gdf = gdf_projected
+
+                # Calculate areas and filter
+                gdf = self._calculate_area(gdf)
+                gdf = gdf[
+                    (gdf["bldg_area"] > self.min_building_area) & 
+                    (gdf["bldg_area"] < self.max_building_area)
+                ]
+                
+                if not gdf.empty:
+                    gdfs.append(gdf)
+            except Exception as e:
+                logging.error(f"Error processing settlement {pkey}: {e}")
+                continue
+
+        if not gdfs:
+            return gpd.GeoDataFrame(geometry=[], crs=self.crs)
 
         all_buildings = gpd.GeoDataFrame(
             pd.concat(gdfs), geometry="geometry", crs=self.crs
@@ -402,7 +473,7 @@ class MapGenerator(BaseClass):
         ).reset_index()
 
         return filtered_buildings
-    
+        
     def _calculate_area(self, gdf):
         """
         Private method to calculate areas for geometries in a GeoDataFrame, reprojecting if necessary.
@@ -424,50 +495,56 @@ class MapGenerator(BaseClass):
         
         return gdf    
     
-    def regularize_polygon(self, polygon, simplify_tolerance=1.0, buffer_distance=0.5, use_mbr=False, mbr_threshold=0.85):
+    def regularize_polygon(self, polygon, simplify_tolerance=None, buffer_distance=None, 
+                        use_mbr=None, mbr_threshold=None):
         """
-        Regularize a polygon using simplification, buffering, and optionally minimum bounding rectangle.
-
-        Parameters:
-        - polygon: Shapely Polygon or MultiPolygon
-        - simplify_tolerance: Tolerance for polygon simplification
-        - buffer_distance: Distance for buffer operations
-        - use_mbr: Whether to consider using minimum bounding rectangle
-        - mbr_threshold: Threshold for deciding to use MBR (based on area ratio)
-
-        Returns:
-        - Regularized Shapely Polygon or MultiPolygon
+        Regularize polygon using simplification, smoothing and MBR where appropriate.
         """
+        # Use class attributes as defaults
+        simplify_tolerance = simplify_tolerance or self.simplify_tolerance
+        buffer_distance = buffer_distance or self.buffer_distance
+        use_mbr = use_mbr if use_mbr is not None else self.use_mbr
+        mbr_threshold = mbr_threshold or self.mbr_threshold
+
         if polygon.is_empty or polygon.area == 0:
             return polygon
 
         # Handle MultiPolygons
         if isinstance(polygon, MultiPolygon):
-            return MultiPolygon([self.regularize_polygon(p, simplify_tolerance, buffer_distance, use_mbr, mbr_threshold) for p in polygon.geoms])
+            regularized_parts = [self.regularize_polygon(p, 
+                                                    simplify_tolerance, 
+                                                    buffer_distance,
+                                                    use_mbr,
+                                                    mbr_threshold) for p in polygon.geoms]
+            return MultiPolygon(regularized_parts)
 
-        # Simplify
-        simplified = polygon.simplify(simplify_tolerance, preserve_topology=True)
-        
-        # Smooth using buffer
-        smoothed = simplified.buffer(-buffer_distance).buffer(buffer_distance)
-        
-        # Fill holes
-        filled = smoothed.buffer(0)
+        try:
+            # Initial simplification and smoothing
+            simplified = polygon.simplify(simplify_tolerance, preserve_topology=True)
+            smoothed = simplified.buffer(-buffer_distance).buffer(buffer_distance)
+            filled = smoothed.buffer(0)
 
-        if use_mbr and filled.area > 0:
-            # Calculate the minimum bounding rectangle
-            mbr = filled.minimum_rotated_rectangle
+            # Handle case where buffer operations create a MultiPolygon
+            if isinstance(filled, MultiPolygon):
+                filled = max(filled.geoms, key=lambda x: x.area)
+
+            if not filled.is_valid or filled.is_empty:
+                return polygon
+
+            # Check if MBR would be appropriate
+            if use_mbr and filled.area > 0:
+                mbr = filled.minimum_rotated_rectangle
+                if mbr.area > 0:
+                    area_ratio = filled.area / mbr.area
+                    if area_ratio > mbr_threshold:
+                        return mbr
+
+            return filled
             
-            # Calculate area ratio, avoiding division by zero
-            if mbr.area > 0:
-                area_ratio = filled.area / mbr.area
-                
-                # If the area ratio is above the threshold, use the MBR
-                if area_ratio > mbr_threshold:
-                    return mbr
-
-        return filled
-
+        except Exception as e:
+            logging.warning(f"Error during polygon regularization: {e}. Returning original polygon.")
+            return polygon
+        
     def _calculate_dominant_angle(self, polygon):
         """Calculate the dominant angle of a polygon."""
         coords = np.array(polygon.exterior.coords)
@@ -526,21 +603,12 @@ class MapGenerator(BaseClass):
 
         if self.use_edge_detection:
             edge_prob = class_probs[2, :, :]
-            initial_mask = (1 - (edge_prob > self.edge_threshold).astype(np.uint8)) * (building_prob > self.building_threshold).astype(np.uint8)
             
             building_mask = self.edge_guided_segmentation(
                 building_prob, 
-                edge_prob,
-                building_threshold=self.building_threshold,
-                edge_threshold=self.edge_threshold,
-                min_building_size=self.min_building_size,
-                max_hole_size=self.max_hole_size,
-                morph_kernel_size=self.morph_kernel_size
+                edge_prob
             )
-        else:
-            edge_prob = None
-            initial_mask = (building_prob > self.building_threshold).astype(np.uint8)
-            building_mask = initial_mask.copy()
+
 
         inference_path = self.predictions_dir / f"{image_file.stem}_INFERENCE.TIF"
 
@@ -575,26 +643,29 @@ class MapGenerator(BaseClass):
 
 
     def edge_guided_segmentation(self, building_prob, edge_prob=None, 
-                                building_threshold=0.3, edge_threshold=0.3, 
-                                min_building_size=15, max_hole_size=10, 
-                                morph_kernel_size=3):
+                                building_threshold=None, edge_threshold=None, 
+                                min_building_size=None, max_hole_size=None, 
+                                morph_kernel_size=None):
+        """
+        Apply edge-guided segmentation to building probability map.
+        Uses class attributes as defaults if parameters not provided.
+        """
+        # Use class attributes as defaults
+        building_threshold = building_threshold or self.building_threshold
+        edge_threshold = edge_threshold or self.edge_threshold
+        min_building_size = min_building_size or self.min_building_size
+        max_hole_size = max_hole_size or self.max_hole_size
+        morph_kernel_size = morph_kernel_size or self.morph_kernel_size
         
         if edge_prob is None:
             combined_prob = building_prob
         else:
-            # Combine probabilities 
-            combined_prob = building_prob * (1 - 0.5 * edge_prob)
+            # Create edge mask using threshold
+            edge_mask = edge_prob > edge_threshold
+            # Suppress building probabilities where edges are detected
+            combined_prob = building_prob * (1 - edge_mask)
         
-        # Apply morphological operations on the probability map
-     #   kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (morph_kernel_size, morph_kernel_size))
-        
-        # Opening (erosion followed by dilation)
-      #  opened_prob = cv2.morphologyEx(combined_prob, cv2.MORPH_OPEN, kernel)
-        
-        # Closing (dilation followed by erosion)
-      #  closed_prob = cv2.morphologyEx(opened_prob, cv2.MORPH_CLOSE, kernel)
-        
-        # Apply median filter
+        # Apply median filter for smoothing
         smoothed_prob = median_filter(combined_prob, size=3)
         
         # Final thresholding
@@ -602,9 +673,22 @@ class MapGenerator(BaseClass):
         
         # Remove small objects and fill small holes
         cleaned_mask = remove_small_objects(binary_mask.astype(bool), min_size=min_building_size)
-        filled_mask = remove_small_holes(cleaned_mask, area_threshold=max_hole_size)
+        filled_mask = remove_small_holes(cleaned_mask, area_threshold=max_hole_size).astype(np.uint8)
         
-        return filled_mask.astype(np.uint8)
+        # Create morphological kernels
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (morph_kernel_size, morph_kernel_size))
+        small_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        
+        # Apply morphological opening to remove small protrusions
+        opened = cv2.morphologyEx(filled_mask, cv2.MORPH_OPEN, kernel)
+        
+        # Apply morphological closing to fill small gaps
+        closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel)
+        
+        # Final dilation to slightly expand building footprints
+        dilated = cv2.dilate(closed, small_kernel, iterations=1)
+        
+        return dilated
 
     def save_threshold_visualizations(self, rgb_image, building_prob, edge_prob, final_mask, output_path):
         fig, axs = plt.subplots(2, 2, figsize=(12, 12))
