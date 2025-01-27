@@ -112,7 +112,7 @@ class MapGenerator(BaseClass):
         """
         Load edge-guided segmentation parameters.
         """
-        edge_guided_keys = ["building_threshold", "edge_threshold", "min_building_size", "max_hole_size", "morph_kernel_size"]
+        edge_guided_keys = ["building_threshold", "edge_threshold", "min_building_size", "max_hole_size", "morph_kernel_size", "save_visualizations"]
         self.edge_guided_params = {k: self.config.get("edge_guided_segmentation", {}).get(k) for k in edge_guided_keys}
         
         # Set default values if not provided
@@ -121,7 +121,8 @@ class MapGenerator(BaseClass):
             "edge_threshold": 0.1,
             "min_building_size": 50,
             "max_hole_size": 50,
-            "morph_kernel_size": 5
+            "morph_kernel_size": 5,
+            "save_visualizations": False
         }
         
         for k, v in defaults.items():
@@ -623,11 +624,12 @@ class MapGenerator(BaseClass):
         output_da = output_da.rio.write_transform(tile.rio.transform())
         output_da.rio.to_raster(inference_path)
 
-        viz_path = self.predictions_dir / f"{image_file.stem}_visualizations.png"
-        rgb_image = tile.data.transpose(1, 2, 0)  # Convert to HWC format for visualization
-        self.save_threshold_visualizations(rgb_image, building_prob, edge_prob, 
-                                   building_mask, 
-                                   viz_path)
+        if self.save_visualizations:
+            viz_path = self.predictions_dir / f"{image_file.stem}_visualizations.png"
+            rgb_image = tile.data.transpose(1, 2, 0)  # Convert to HWC format for visualization
+            self.save_threshold_visualizations(rgb_image, building_prob, edge_prob, 
+                                    building_mask, 
+                                    viz_path)
 
 
         # Generate shapefile
